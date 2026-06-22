@@ -45,7 +45,8 @@
       ],
       "icon": "assets/icon.ico",
       "artifactName": "${productName}-Setup-${version}.${ext}",
-      "publisherName": "Soterios"
+      "publisherName": "Soterios",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,

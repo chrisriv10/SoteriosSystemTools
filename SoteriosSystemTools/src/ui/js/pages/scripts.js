@@ -86,6 +86,51 @@ window.Pages.scripts = {
       return;
     }
 
+    if (Array.isArray(result.files)) {
+      outputEl.innerHTML = `
+        <div class="log-row" style="background:var(--panel-raised);"><span class="log-path">${result.count} file(s) over ${result.minSizeMB} MB under ${escapeHtml(result.root)}</span></div>
+        ${result.files.map((file) => `
+          <div class="log-row"><span class="log-tag warn">${file.sizeMB} MB</span><span class="log-path">${escapeHtml(file.path)}</span></div>
+        `).join('') || '<div class="empty-state">No large files found.</div>'}
+      `;
+      return;
+    }
+
+    if (Array.isArray(result.browsers)) {
+      outputEl.innerHTML = `
+        <div class="log-row" style="background:var(--panel-raised);"><span class="log-path">Estimated cache total: ${result.totalMB} MB</span></div>
+        ${result.browsers.map((browser) => `
+          <div class="log-row"><span class="log-tag ${browser.sizeMB > 500 ? 'warn' : 'clean'}">${browser.sizeMB} MB</span><span class="log-path">${escapeHtml(browser.name)} - ${escapeHtml(browser.path)}</span></div>
+        `).join('')}
+      `;
+      return;
+    }
+
+    if (Array.isArray(result.interfaces)) {
+      const rows = result.interfaces.map((iface) => `
+        <div class="log-row"><span class="log-tag clean">${escapeHtml(iface.operstate || 'n/a')}</span><span class="log-path">${escapeHtml(iface.iface)} - IPv4 ${escapeHtml(iface.ip4 || 'n/a')} - ${escapeHtml(iface.type || '')}</span></div>
+      `).join('');
+      const connections = (result.activeConnections || []).slice(0, 30).map((conn) => `
+        <div class="log-row"><span class="log-tag">${escapeHtml(conn.protocol || '')}</span><span class="log-path">${escapeHtml(conn.localAddress)}:${escapeHtml(conn.localPort)} -> ${escapeHtml(conn.peerAddress)}:${escapeHtml(conn.peerPort)} ${conn.process ? '- ' + escapeHtml(conn.process) : ''}</span></div>
+      `).join('');
+      outputEl.innerHTML = `
+        <div class="log-row" style="background:var(--panel-raised);"><span class="log-path">Gateway: ${escapeHtml(result.defaultGateway || 'n/a')} - Established connections: ${result.establishedConnectionCount}</span></div>
+        ${rows}
+        ${connections}
+      `;
+      return;
+    }
+
+    if (Array.isArray(result.services)) {
+      outputEl.innerHTML = `
+        <div class="log-row" style="background:var(--panel-raised);"><span class="log-path">${result.autoStartCount} auto-start services, ${result.flaggedCount} path(s) worth review</span></div>
+        ${(result.flagged.length ? result.flagged : result.services.slice(0, 40)).map((service) => `
+          <div class="log-row"><span class="log-tag ${service.flagged ? 'warn' : 'clean'}">${escapeHtml(service.state || '')}</span><span class="log-path">${escapeHtml(service.displayName || service.name)} - ${escapeHtml(service.pathName || '')}</span></div>
+        `).join('')}
+      `;
+      return;
+    }
+
     // Generic JSON pretty-print fallback for read-only report scripts
     outputEl.innerHTML = `<div class="log-row"><span class="log-path" style="white-space:pre-wrap;">${escapeHtml(JSON.stringify(result, null, 2))}</span></div>`;
   }

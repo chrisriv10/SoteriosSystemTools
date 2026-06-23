@@ -18,5 +18,12 @@ contextBridge.exposeInMainWorld('soterios', {
   },
   shell: {
     showItemInFolder: (filePath) => ipcRenderer.invoke('shell:showItemInFolder', filePath)
+  },
+  store: {
+    snapshot: () => ipcRenderer.invoke('store:snapshot'),
+    settings: () => ipcRenderer.invoke('store:settings'),
+    updateSettings: (patch) => ipcRenderer.invoke('store:updateSettings', patch),
+    history: (kind, limit) => ipcRenderer.invoke('store:history', kind, limit),
+    quarantine: () => ipcRenderer.invoke('store:quarantine')
   }
 });

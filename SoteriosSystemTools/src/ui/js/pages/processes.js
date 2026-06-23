@@ -7,7 +7,7 @@ window.Pages.processes = {
         <div class="flex-between">
           <div>
             <h1 class="page-title">Processes</h1>
-            <div class="page-subtitle">Running processes sorted by CPU usage</div>
+            <div class="page-subtitle">Running processes sorted by CPU usage, with command details when available</div>
           </div>
           <button class="btn" id="refreshBtn">Refresh</button>
         </div>
@@ -32,6 +32,7 @@ window.Pages.processes = {
       const headerRow = `
         <div class="log-row" style="background:var(--panel-raised); font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-dim);">
           <span style="width:64px; flex-shrink:0;">PID</span>
+          <span style="width:64px; flex-shrink:0;">Parent</span>
           <span style="flex:1;">Name</span>
           <span style="width:70px; flex-shrink:0; text-align:right;">CPU %</span>
           <span style="width:80px; flex-shrink:0; text-align:right;">Mem %</span>
@@ -41,7 +42,11 @@ window.Pages.processes = {
       const rows = top.map((p) => `
         <div class="log-row">
           <span style="width:64px; flex-shrink:0; color:var(--text-dim);">${p.pid}</span>
-          <span style="flex:1; color:var(--text);">${escapeHtml(p.name)}</span>
+          <span style="width:64px; flex-shrink:0; color:var(--text-dim);">${p.ppid || 'n/a'}</span>
+          <span style="flex:1; color:var(--text);">
+            ${escapeHtml(p.name)}
+            ${p.cmd ? `<span class="row-meta">${escapeHtml(p.cmd)}</span>` : ''}
+          </span>
           <span style="width:70px; flex-shrink:0; text-align:right; color:${(p.cpu || 0) > 50 ? 'var(--warn)' : 'var(--text-muted)'};">${p.cpu !== null ? p.cpu + '%' : '—'}</span>
           <span style="width:80px; flex-shrink:0; text-align:right; color:var(--text-muted);">${p.memory !== null ? p.memory + '%' : '—'}</span>
         </div>

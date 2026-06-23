@@ -3,6 +3,7 @@ const path = require('path');
 
 const pluginLoader = require('./src/core/pluginLoader');
 const toolRegistry = require('./src/core/toolRegistry');
+const appStore = require('./src/core/appStore');
 
 let mainWindow;
 
@@ -35,6 +36,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  appStore.init(app.getPath('userData'));
+
   // Discover and register all tool plugins before the UI asks for them
   await pluginLoader.loadAll();
 
@@ -129,11 +132,22 @@ ipcMain.handle('tools:list', () => {
 
 ipcMain.handle('tools:run', async (event, toolId, args) => {
   return toolRegistry.run(toolId, args, {
+    appStore,
     sendProgress: (payload) => {
       event.sender.send(`tools:progress:${toolId}`, payload);
     }
   });
 });
+
+/* ---------------------------------------------------------------------- */
+/* IPC: local app data                                                    */
+/* ---------------------------------------------------------------------- */
+
+ipcMain.handle('store:snapshot', () => appStore.getSnapshot());
+ipcMain.handle('store:settings', () => appStore.getSettings());
+ipcMain.handle('store:updateSettings', (event, patch) => appStore.updateSettings(patch || {}));
+ipcMain.handle('store:history', (event, kind, limit) => appStore.listHistory(kind, limit));
+ipcMain.handle('store:quarantine', () => appStore.listQuarantine());
 
 /* ---------------------------------------------------------------------- */
 /* IPC: native dialogs                                                    */

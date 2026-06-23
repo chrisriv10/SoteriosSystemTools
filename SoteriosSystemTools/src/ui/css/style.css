@@ -674,3 +674,251 @@ input:focus {
 .section-spacer {
   height: 18px;
 }
+
+.muted-line {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.scanner-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.inline-field input {
+  width: 76px;
+}
+
+.result-row {
+  align-items: center;
+}
+
+.risk-pill {
+  width: 34px;
+  flex-shrink: 0;
+  border: 1px solid var(--hairline-bright);
+  border-radius: 2px;
+  padding: 2px 4px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.risk-none { color: var(--text-dim); }
+.risk-low { color: var(--text-muted); }
+.risk-medium { color: var(--warn); }
+.risk-high,
+.risk-critical { color: var(--danger); }
+
+.row-detail {
+  color: var(--text);
+}
+
+.row-meta {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item.compact {
+  padding: 9px 0;
+}
+
+.history-title {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.history-meta {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.history-counts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.ok { color: var(--ok); }
+.warn { color: var(--warn); }
+.danger { color: var(--danger); }
+
+.action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.action-item {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.action-item:last-child {
+  border-bottom: none;
+}
+
+.action-level {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.action-ok .action-level { color: var(--ok); }
+.action-warn .action-level { color: var(--warn); }
+.action-danger .action-level { color: var(--danger); }
+
+.action-title {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.action-detail {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mini-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.mini-action:last-child {
+  border-bottom: none;
+}
+
+.mini-ok { color: var(--ok); }
+.mini-warn { color: var(--warn); }
+.mini-danger { color: var(--danger); }
+
+.timeline-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timeline-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.timeline-label {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+
+.timeline-track {
+  height: 56px;
+  display: flex;
+  align-items: end;
+  gap: 4px;
+  border: 1px solid var(--hairline);
+  background: #08090b;
+  padding: 8px;
+}
+
+.timeline-bar {
+  width: 100%;
+  min-width: 5px;
+  background: var(--accent);
+}
+
+.timeline-bar.ok { background: var(--ok); }
+.timeline-bar.warn { background: var(--warn); }
+.timeline-bar.danger { background: var(--danger); }
+
+.quarantine-item {
+  align-items: flex-start;
+}
+
+.quarantine-main {
+  min-width: 0;
+}
+
+.quarantine-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 980px) {
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell {
+    grid-template-columns: 190px 1fr;
+  }
+
+  .main {
+    padding: 22px 22px 44px;
+  }
+
+  .health-ring-wrap,
+  .history-item,
+  .mini-action {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .action-item {
+    grid-template-columns: 1fr;
+  }
+}

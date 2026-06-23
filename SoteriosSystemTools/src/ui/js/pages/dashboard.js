@@ -5,62 +5,71 @@ window.Pages.dashboard = {
     container.innerHTML = `
       <div class="page-header">
         <h1 class="page-title">Dashboard</h1>
-        <div class="page-subtitle">System health at a glance</div>
+        <div class="page-subtitle">Security posture, device health, and recent maintenance at a glance</div>
       </div>
 
-      <div class="grid grid-2" style="margin-bottom:18px;">
+      <div class="grid grid-2 dashboard-top" style="margin-bottom:18px;">
         <div class="panel">
           <div class="panel-title">System Health Score</div>
           <div class="health-ring-wrap" id="healthRingWrap">
-            <div class="empty-state" style="padding:8px 0;">Loading…</div>
+            <div class="empty-state" style="padding:8px 0;">Loading...</div>
           </div>
         </div>
 
         <div class="panel">
-          <div class="panel-title">Quick Actions</div>
-          <div style="display:flex; flex-direction:column; gap:10px;">
-            <button class="btn btn-primary" id="qaScan">${iconButtonSvg('search')} Run File Scan</button>
-            <button class="btn" id="qaPassword">${iconButtonSvg('key')} Generate Password</button>
-            <button class="btn" id="qaCleanup">${iconButtonSvg('terminal')} Clear Temp Files</button>
+          <div class="flex-between" style="margin-bottom:14px;">
+            <div class="panel-title" style="margin-bottom:0;">Action Center</div>
+            <button class="btn btn-sm" id="openActions">Open</button>
           </div>
+          <div id="dashboardActions"><div class="empty-state">Loading recommendations...</div></div>
         </div>
       </div>
 
-      <div class="grid grid-3" id="statTiles">
-        <div class="stat-tile"><div class="stat-label">CPU Load</div><div class="stat-value">—</div></div>
-        <div class="stat-tile"><div class="stat-label">Memory</div><div class="stat-value">—</div></div>
-        <div class="stat-tile"><div class="stat-label">Disk Free</div><div class="stat-value">—</div></div>
+      <div class="grid grid-3" id="statTiles" style="margin-bottom:18px;">
+        <div class="stat-tile"><div class="stat-label">CPU Load</div><div class="stat-value">-</div></div>
+        <div class="stat-tile"><div class="stat-label">Memory</div><div class="stat-value">-</div></div>
+        <div class="stat-tile"><div class="stat-label">Disk Free</div><div class="stat-value">-</div></div>
       </div>
 
-      <div class="section-spacer"></div>
+      <div class="panel" style="margin-bottom:18px;">
+        <div class="panel-title">System Timeline</div>
+        <div class="timeline-bars" id="timelineBars"><div class="empty-state">Collecting timeline sample...</div></div>
+      </div>
 
-      <div class="panel">
-        <div class="panel-title">Last Scan</div>
-        <div id="lastScanSummary" class="empty-state">No scan has been run yet. Go to File Scanner to run one.</div>
+      <div class="grid grid-2">
+        <div class="panel">
+          <div class="panel-title">Last Scan</div>
+          <div id="lastScanSummary" class="empty-state">No scan has been run yet.</div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Recent Activity</div>
+          <div id="recentActivity" class="history-list"><div class="empty-state">No recent activity yet.</div></div>
+        </div>
       </div>
     `;
 
-    container.querySelector('#qaScan').addEventListener('click', () => window.AppRouter.navigate('scanner'));
-    container.querySelector('#qaPassword').addEventListener('click', () => window.AppRouter.navigate('passwords'));
-    container.querySelector('#qaCleanup').addEventListener('click', () => window.AppRouter.navigate('scripts'));
+    container.querySelector('#openActions').addEventListener('click', () => window.AppRouter.navigate('actions'));
 
     this.loadHealthScore(container);
     this.loadStats(container);
+    this.loadActions(container);
     this.loadLastScan(container);
+    this.loadRecentActivity(container);
+    this.loadTimeline(container);
   },
 
   async loadHealthScore(container) {
     const wrap = container.querySelector('#healthRingWrap');
     try {
-      const lastScan = window.AppState && window.AppState.lastScanSummary;
+      const scans = await Api.getHistory('scans', 1);
+      const latestScan = scans[0] && scans[0].summary;
       const args = {
-        lastScanMatches: lastScan ? lastScan.matches : null,
+        lastScanMatches: latestScan ? latestScan.matches : null,
         passwordScore: window.AppState ? window.AppState.lastPasswordScore : null
       };
       const result = await Api.runTool('health-score', args);
       renderHealthRing(wrap, result);
 
-      // Reflect score on the sidebar status rail
       const rail = document.getElementById('statusRail');
       if (rail) {
         const level = result.score >= 70 ? 'ok' : result.score >= 40 ? 'warn' : 'danger';
@@ -97,10 +106,52 @@ window.Pages.dashboard = {
     }
   },
 
-  loadLastScan(container) {
+  async loadActions(container) {
+    const el = container.querySelector('#dashboardActions');
+    try {
+      const data = await Api.runTool('action-center', {});
+      el.innerHTML = data.items.slice(0, 3).map((item) => `
+        <div class="mini-action mini-${escapeHtml(item.level)}">
+          <span>${escapeHtml(item.title)}</span>
+          <button class="btn btn-sm" data-page="${escapeHtml(item.actionPage)}">Open</button>
+        </div>
+      `).join('');
+      el.querySelectorAll('[data-page]').forEach((btn) => {
+        btn.addEventListener('click', () => window.AppRouter.navigate(btn.dataset.page));
+      });
+    } catch (err) {
+      showToolError(el, err);
+    }
+  },
+
+  async loadTimeline(container) {
+    const el = container.querySelector('#timelineBars');
+    try {
+      await Api.runTool('system-timeline-sample', {});
+      const samples = await Api.getHistory('health', 24);
+      if (!samples.length) {
+        el.innerHTML = '<div class="empty-state">No timeline samples yet.</div>';
+        return;
+      }
+      el.innerHTML = ['cpu', 'memory', 'disk'].map((key) => `
+        <div class="timeline-row">
+          <div class="timeline-label">${key.toUpperCase()}</div>
+          <div class="timeline-track">
+            ${samples.slice().reverse().map((sample) => `<span class="timeline-bar ${tileColor(sample[key] || 0, 75, 90)}" style="height:${Math.max(6, sample[key] || 0)}%"></span>`).join('')}
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      showToolError(el, err);
+    }
+  },
+
+  async loadLastScan(container) {
     const el = container.querySelector('#lastScanSummary');
-    const summary = window.AppState && window.AppState.lastScanSummary;
-    if (!summary) return;
+    const scans = await Api.getHistory('scans', 1);
+    const scan = scans[0];
+    if (!scan) return;
+    const summary = scan.summary;
     el.classList.remove('empty-state');
     el.innerHTML = `
       <div class="grid grid-4">
@@ -109,13 +160,25 @@ window.Pages.dashboard = {
         <div class="stat-tile"><div class="stat-label">Suspicious</div><div class="stat-value warn">${summary.suspicious}</div></div>
         <div class="stat-tile"><div class="stat-label">Matches</div><div class="stat-value danger">${summary.matches}</div></div>
       </div>
+      <div class="muted-line" style="margin-top:10px;">${escapeHtml(summary.targetPath)} - ${escapeHtml(new Date(summary.completedAt).toLocaleString())}</div>
     `;
+  },
+
+  async loadRecentActivity(container) {
+    const el = container.querySelector('#recentActivity');
+    const actions = await Api.getHistory('actions', 6);
+    if (!actions.length) return;
+    el.innerHTML = actions.map((action) => `
+      <div class="history-item compact">
+        <div>
+          <div class="history-title">${escapeHtml(action.title)}</div>
+          <div class="history-meta">${escapeHtml(action.detail || '')}</div>
+        </div>
+        <div class="history-meta">${escapeHtml(new Date(action.createdAt).toLocaleString())}</div>
+      </div>
+    `).join('');
   }
 };
-
-function iconButtonSvg(name) {
-  return `<span style="width:14px;height:14px;display:inline-flex;">${iconFor(name)}</span>`;
-}
 
 function tileColor(value, warnAt, dangerAt) {
   if (value >= dangerAt) return 'danger';
@@ -131,7 +194,7 @@ function renderHealthRing(wrap, result) {
   const color = score >= 70 ? 'var(--ok)' : score >= 40 ? 'var(--warn)' : 'var(--danger)';
 
   const rowsHtml = Object.entries(result.breakdown)
-    .map(([key, info]) => `
+    .map(([, info]) => `
       <div class="health-row">
         <span class="label">${escapeHtml(info.reason)}</span>
         <span class="pts">${info.points}/${info.max}</span>

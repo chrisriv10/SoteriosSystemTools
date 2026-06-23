@@ -13,6 +13,8 @@ module.exports = {
       .map((p) => ({
         pid: p.pid,
         name: p.name,
+        cmd: p.cmd || null,
+        ppid: p.ppid || null,
         cpu: p.cpu !== undefined ? +p.cpu.toFixed(1) : null,
         memory: p.memory !== undefined ? +p.memory.toFixed(1) : null
       }))

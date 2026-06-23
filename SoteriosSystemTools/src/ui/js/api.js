@@ -29,5 +29,25 @@ const Api = {
 
   async showItemInFolder(filePath) {
     return window.soterios.shell.showItemInFolder(filePath);
+  },
+
+  async getStoreSnapshot() {
+    return window.soterios.store.snapshot();
+  },
+
+  async getSettings() {
+    return window.soterios.store.settings();
+  },
+
+  async updateSettings(patch) {
+    return window.soterios.store.updateSettings(patch);
+  },
+
+  async getHistory(kind, limit) {
+    return window.soterios.store.history(kind, limit);
+  },
+
+  async getQuarantine() {
+    return window.soterios.store.quarantine();
   }
 };

@@ -1,12 +1,23 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 
 const { loadPlugins } = require('../core/pluginLoader');
 const toolRegistry = require('../core/toolRegistry');
 const appStore = require('../core/appStore');
 
 let mainWindow;
+
+function logLine(level, message, meta) {
+  try {
+    const line = JSON.stringify({ ts: new Date().toISOString(), level, message, meta: meta || null }) + '\n';
+    fs.mkdirSync(app.getPath('userData'), { recursive: true });
+    fs.appendFileSync(path.join(app.getPath('userData'), 'soterios.log'), line);
+  } catch (_) {
+    // Logging should never block app startup or tool execution.
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -15,7 +26,7 @@ function createWindow() {
     minWidth: 980,
     minHeight: 640,
     backgroundColor: '#0e1117',
-    title: 'Soterios System Tools',
+    title: 'Soterios',
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
@@ -43,12 +54,11 @@ function buildAppMenu() {
   const aboutHandler = () => {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
-      title: 'About Soterios System Tools',
-      message: 'Soterios System Tools',
+      title: 'About Soterios',
+      message: 'Soterios',
       detail:
         `Version ${app.getVersion()}\n\n` +
-        'A local-first desktop toolkit for system maintenance, monitoring, ' +
-        'and basic security checks.\n\n' +
+        'A local-first Windows security and system health assistant.\n\n' +
         'This app does not collect, transmit, or upload any data. All ' +
         'scanning and analysis happens entirely on this device.\n\n' +
         'The file scanner is a local heuristic/signature tool, not a ' +
@@ -62,7 +72,7 @@ function buildAppMenu() {
       ? [{
         label: app.name,
         submenu: [
-          { label: 'About Soterios System Tools', click: aboutHandler },
+          { label: 'About Soterios', click: aboutHandler },
           { type: 'separator' },
           { role: 'services' },
           { type: 'separator' },
@@ -94,7 +104,7 @@ function buildAppMenu() {
     {
       label: 'Help',
       submenu: [
-        ...(isMac ? [] : [{ label: 'About Soterios System Tools', click: aboutHandler }]),
+        ...(isMac ? [] : [{ label: 'About Soterios', click: aboutHandler }]),
         {
           label: 'Quarantine Folder',
           click: () => shell.openPath(quarantineDir)
@@ -108,13 +118,22 @@ function buildAppMenu() {
 
 app.whenReady().then(async () => {
   appStore.init(app.getPath('userData'));
-  loadPlugins();
+  const loadedTools = loadPlugins();
+  logLine('info', 'Plugins loaded', { count: loadedTools.length });
   buildAppMenu();
   createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+process.on('uncaughtException', (err) => {
+  logLine('fatal', 'Uncaught exception', { message: err.message, stack: err.stack });
+});
+
+process.on('unhandledRejection', (err) => {
+  logLine('fatal', 'Unhandled rejection', { message: err && err.message ? err.message : String(err), stack: err && err.stack });
 });
 
 app.on('window-all-closed', () => {
@@ -130,6 +149,8 @@ ipcMain.handle('tools:list', () => toolRegistry.list());
 ipcMain.handle('tools:run', async (event, toolId, args) => {
   return toolRegistry.run(toolId, args, {
     appStore,
+    toolRegistry,
+    log: logLine,
     sendProgress: (payload) => {
       event.sender.send(`tools:progress:${toolId}`, payload);
     }
@@ -145,6 +166,12 @@ ipcMain.handle('store:settings', () => appStore.getSettings());
 ipcMain.handle('store:updateSettings', (_event, patch) => appStore.updateSettings(patch || {}));
 ipcMain.handle('store:history', (_event, kind, limit) => appStore.listHistory(kind, limit));
 ipcMain.handle('store:quarantine', () => appStore.listQuarantine());
+ipcMain.handle('app:info', () => ({
+  name: app.getName(),
+  version: app.getVersion(),
+  userData: app.getPath('userData'),
+  logPath: path.join(app.getPath('userData'), 'soterios.log')
+}));
 
 /* ---------------------------------------------------------------------- */
 /* IPC: native dialogs                                                     */

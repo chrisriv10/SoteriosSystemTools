@@ -30,7 +30,9 @@ const DEFAULT_STORE = {
     scans: [],
     actions: [],
     scripts: [],
-    health: []
+    health: [],
+    startup: [],
+    reports: []
   },
   quarantine: []
 };
@@ -160,8 +162,14 @@ function listQuarantine() {
   return clone(cache.quarantine);
 }
 
+function getDataDir() {
+  if (!storePath) throw new Error('App store has not been initialized');
+  return path.dirname(storePath);
+}
+
 module.exports = {
   init,
+  getDataDir,
   getSnapshot,
   getSettings,
   updateSettings,

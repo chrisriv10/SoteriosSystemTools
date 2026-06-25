@@ -4,8 +4,8 @@ window.Pages.actions = {
   async render(container) {
     container.innerHTML = `
       <div class="page-header">
-        <h1 class="page-title">Action Center</h1>
-        <div class="page-subtitle">Prioritized security and maintenance recommendations</div>
+        <h1 class="page-title">Recommendations</h1>
+        <div class="page-subtitle">Prioritized actions generated from real Windows protection and system checks</div>
       </div>
 
       <div class="grid grid-3" id="actionSummary" style="margin-bottom:18px;"></div>
@@ -28,13 +28,15 @@ window.Pages.actions = {
     const summaryEl = container.querySelector('#actionSummary');
     listEl.innerHTML = '<div class="empty-state">Loading recommendations...</div>';
     try {
-      const data = await Api.runTool('action-center', {});
+      const data = await Api.runTool('security-overview', {});
+      const danger = data.recommendations.filter((item) => item.level === 'danger').length;
+      const warn = data.recommendations.filter((item) => item.level === 'warn').length;
       summaryEl.innerHTML = `
-        <div class="stat-tile"><div class="stat-label">Urgent</div><div class="stat-value danger">${data.counts.danger}</div></div>
-        <div class="stat-tile"><div class="stat-label">Review</div><div class="stat-value warn">${data.counts.warn}</div></div>
-        <div class="stat-tile"><div class="stat-label">Generated</div><div class="stat-value" style="font-size:14px;">${escapeHtml(new Date(data.generatedAt).toLocaleTimeString())}</div></div>
+        <div class="stat-tile"><div class="stat-label">Score</div><div class="stat-value ${data.level}">${data.score}</div></div>
+        <div class="stat-tile"><div class="stat-label">Urgent</div><div class="stat-value danger">${danger}</div></div>
+        <div class="stat-tile"><div class="stat-label">Review</div><div class="stat-value warn">${warn}</div></div>
       `;
-      listEl.innerHTML = data.items.map((item) => this.renderItem(item)).join('');
+      listEl.innerHTML = data.recommendations.map((item) => this.renderItem(item)).join('');
       listEl.querySelectorAll('[data-action-page]').forEach((btn) => {
         btn.addEventListener('click', () => window.AppRouter.navigate(btn.dataset.actionPage));
       });

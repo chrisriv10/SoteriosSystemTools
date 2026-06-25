@@ -25,5 +25,8 @@ contextBridge.exposeInMainWorld('soterios', {
     updateSettings: (patch) => ipcRenderer.invoke('store:updateSettings', patch),
     history: (kind, limit) => ipcRenderer.invoke('store:history', kind, limit),
     quarantine: () => ipcRenderer.invoke('store:quarantine')
+  },
+  app: {
+    info: () => ipcRenderer.invoke('app:info')
   }
 });

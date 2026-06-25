@@ -151,9 +151,11 @@ window.Pages.scanner = {
     const detail = result.status === 'match'
       ? `Matched signature "${escapeHtml(result.signatureName)}"`
       : result.status === 'suspicious'
-        ? escapeHtml(flagText)
+        ? escapeHtml(result.explanation || flagText)
         : escapeHtml(result.error || result.reason || '');
     const reason = result.status === 'match' ? `Signature match: ${result.signatureName}` : flagText;
+    const signature = result.signature ? `Signature: ${result.signature.status}${result.signature.publisher ? ` / ${result.signature.publisher}` : ''}` : '';
+    const recommendation = result.recommendedAction || (risk.score ? 'Review this file before trusting it.' : 'No action needed.');
 
     const quarantineBtn = (result.status === 'match' || result.status === 'suspicious')
       ? `<button class="btn btn-sm btn-danger" data-quarantine-path="${escapeHtml(result.path)}" data-hash="${escapeHtml(result.hash || '')}" data-risk="${escapeHtml(JSON.stringify(risk))}" data-reason="${escapeHtml(reason)}">Quarantine</button>`
@@ -167,6 +169,9 @@ window.Pages.scanner = {
           ${escapeHtml(result.path)}
           ${detail ? `<span class="row-detail"> - ${detail}</span>` : ''}
           ${result.sizeBytes !== undefined ? `<span class="row-meta">${formatBytes(result.sizeBytes)}</span>` : ''}
+          ${result.hash ? `<span class="row-meta">SHA256 ${escapeHtml(result.hash.slice(0, 16))}...</span>` : ''}
+          ${signature ? `<span class="row-meta">${escapeHtml(signature)}</span>` : ''}
+          <span class="row-meta">${escapeHtml(recommendation)}</span>
         </span>
         ${quarantineBtn}
       </div>

@@ -8,6 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const os = require('os');
+const { getSignatureInfo, isExecutablePath } = require('../security/windowsChecks');
+const { recommendationForRisk } = require('../security/riskEngine');
 
 const SIGNATURE_DB_PATH = path.join(__dirname, 'signatureDB.json');
 const QUARANTINE_DIR = path.join(os.homedir(), '.soterios-quarantine');
@@ -62,6 +64,28 @@ function calculateEntropy(buffer) {
   return entropy;
 }
 
+function parsePEMetadata(buffer) {
+  if (!buffer || buffer.length < 0x40 || buffer.toString('ascii', 0, 2) !== 'MZ') {
+    return null;
+  }
+  const peOffset = buffer.readUInt32LE(0x3c);
+  if (peOffset + 24 > buffer.length || buffer.toString('ascii', peOffset, peOffset + 4) !== 'PE\0\0') {
+    return { validPE: false };
+  }
+  const machine = buffer.readUInt16LE(peOffset + 4);
+  const sections = buffer.readUInt16LE(peOffset + 6);
+  const timestamp = buffer.readUInt32LE(peOffset + 8);
+  const characteristics = buffer.readUInt16LE(peOffset + 22);
+  return {
+    validPE: true,
+    machine,
+    sections,
+    compileTime: timestamp ? new Date(timestamp * 1000).toISOString() : null,
+    isDll: !!(characteristics & 0x2000),
+    isExecutable: !!(characteristics & 0x0002)
+  };
+}
+
 function addFlag(flags, severity, message) {
   flags.push({ severity, message });
 }
@@ -84,7 +108,18 @@ function riskFromStatus(status, flags = []) {
   return { score: 0, level: 'none' };
 }
 
-function runHeuristics(filePath, sampleBuffer, stat) {
+function reputationForHash(hash, options = {}) {
+  const reputation = options.hashReputation || {};
+  const hit = reputation[hash] || reputation[String(hash).toLowerCase()];
+  if (!hit) return { status: 'unknown', source: 'local-reputation-cache' };
+  return {
+    status: hit.status || 'unknown',
+    source: hit.source || 'local-reputation-cache',
+    detail: hit.detail || null
+  };
+}
+
+function runHeuristics(filePath, sampleBuffer, stat, signature, peMetadata) {
   const flags = [];
   const ext = path.extname(filePath).toLowerCase();
   const baseName = path.basename(filePath);
@@ -116,7 +151,22 @@ function runHeuristics(filePath, sampleBuffer, stat) {
   }
 
   if (normalizedPath.includes('\\appdata\\roaming\\') && EXECUTABLE_EXTENSIONS.has(ext)) {
-    addFlag(flags, 'medium', 'Executable or script located under AppData Roaming');
+    addFlag(flags, 'medium', 'Suspicious executable in AppData Roaming');
+  }
+
+  if (isExecutablePath(filePath) && signature && signature.status !== 'Valid') {
+    addFlag(flags, 'medium', 'Executable has no trusted digital signature');
+  }
+
+  if (peMetadata && peMetadata.validPE && peMetadata.sections <= 2) {
+    addFlag(flags, 'low', 'PE metadata shows an unusually low section count');
+  }
+
+  if (peMetadata && peMetadata.validPE && peMetadata.compileTime) {
+    const ageMs = Date.now() - new Date(peMetadata.compileTime).getTime();
+    if (ageMs < 1000 * 60 * 60 * 24 * 7) {
+      addFlag(flags, 'low', 'Executable compile timestamp is very recent');
+    }
   }
 
   if (stat && stat.size > 0 && stat.size < 1024 && EXECUTABLE_EXTENSIONS.has(ext)) {
@@ -192,6 +242,22 @@ async function scanFile(filePath, signatures, options = {}) {
   }
 
   const match = signatures.find((sig) => sig.hash.toLowerCase() === hash.toLowerCase());
+  const reputation = reputationForHash(hash, options);
+  if (reputation.status === 'malicious') {
+    return {
+      path: filePath,
+      status: 'match',
+      hash,
+      reputation,
+      sizeBytes: stat.size,
+      modifiedAt: stat.mtime.toISOString(),
+      signatureName: reputation.detail || 'Hash reputation match',
+      risk: riskFromStatus('match'),
+      explanation: 'SHA-256 matched a malicious hash reputation source.',
+      recommendedAction: 'Quarantine the file and investigate its origin.'
+    };
+  }
+
   if (match) {
     return {
       path: filePath,
@@ -200,20 +266,31 @@ async function scanFile(filePath, signatures, options = {}) {
       sizeBytes: stat.size,
       modifiedAt: stat.mtime.toISOString(),
       signatureName: match.name,
-      risk: riskFromStatus('match')
+      risk: riskFromStatus('match'),
+      reputation,
+      explanation: `SHA-256 matched known local signature "${match.name}".`,
+      recommendedAction: 'Quarantine the file and investigate its origin.'
     };
   }
 
-  const flags = runHeuristics(filePath, sampleBuffer, stat);
+  const signature = isExecutablePath(filePath) ? await getSignatureInfo(filePath) : { status: 'NotChecked', publisher: null };
+  const peMetadata = parsePEMetadata(sampleBuffer);
+  const flags = runHeuristics(filePath, sampleBuffer, stat, signature, peMetadata);
   if (flags.length > 0) {
+    const risk = riskFromStatus('suspicious', flags);
     return {
       path: filePath,
       status: 'suspicious',
       hash,
+      reputation,
       sizeBytes: stat.size,
       modifiedAt: stat.mtime.toISOString(),
       flags,
-      risk: riskFromStatus('suspicious', flags)
+      signature,
+      peMetadata,
+      risk,
+      explanation: flags.map((flag) => flag.message).join('; '),
+      recommendedAction: recommendationForRisk(risk, 'file')
     };
   }
 
@@ -223,7 +300,12 @@ async function scanFile(filePath, signatures, options = {}) {
     hash,
     sizeBytes: stat.size,
     modifiedAt: stat.mtime.toISOString(),
-    risk: riskFromStatus('clean')
+    reputation,
+    signature,
+    peMetadata,
+    risk: riskFromStatus('clean'),
+    explanation: 'No local signature or heuristic risk was found.',
+    recommendedAction: 'No action needed.'
   };
 }
 

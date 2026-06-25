@@ -3,6 +3,7 @@ window.Pages = window.Pages || {};
 window.Pages.settings = {
   async render(container) {
     const settings = await Api.getSettings();
+    const appInfo = await Api.getAppInfo();
     container.innerHTML = `
       <div class="page-header">
         <h1 class="page-title">Settings</h1>
@@ -41,11 +42,13 @@ window.Pages.settings = {
         <div class="panel">
           <div class="panel-title">About</div>
           <div style="font-size:12.5px; color: var(--text-muted); line-height:1.8;">
-            <div><strong style="color:var(--text);">Soterios System Tools</strong> v0.1.0</div>
-            <div>Local-first system maintenance and basic security checks.</div>
+            <div><strong style="color:var(--text);">Soterios Windows Security Assistant</strong> v${escapeHtml(appInfo.version)}</div>
+            <div>Local-first Windows security and system health assistant.</div>
             <div style="margin-top:10px;">No cloud calls are made by the app. Scan history, quarantine records, and settings are stored in Electron app data on this device.</div>
             <div style="margin-top:10px;">Signature database: <span class="mono" style="color:var(--text);">src/av/signatureDB.json</span></div>
             <div>Quarantine folder: <span class="mono" style="color:var(--text);">~/.soterios-quarantine</span></div>
+            <div>App data: <span class="mono" style="color:var(--text);">${escapeHtml(appInfo.userData)}</span></div>
+            <div>Log file: <span class="mono" style="color:var(--text);">${escapeHtml(appInfo.logPath)}</span></div>
           </div>
         </div>
       </div>

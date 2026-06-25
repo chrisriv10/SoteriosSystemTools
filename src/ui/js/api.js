@@ -49,5 +49,9 @@ const Api = {
 
   async getQuarantine() {
     return window.soterios.store.quarantine();
+  },
+
+  async getAppInfo() {
+    return window.soterios.app.info();
   }
 };

@@ -27,12 +27,14 @@ function register(tool) {
 function list() {
   // Only return serializable metadata — never function references — since
   // this crosses the IPC boundary to the renderer.
-  return Array.from(tools.values()).map(({ id, name, description, category, icon, stub }) => ({
+  return Array.from(tools.values()).map(({ id, name, description, category, icon, stub, version, permissions }) => ({
     id,
     name,
     description,
     category,
     icon,
+    version: version || '1.0.0',
+    permissions: permissions || [],
     stub: !!stub
   }));
 }

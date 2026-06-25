@@ -1,7 +1,7 @@
 {
   "name": "soterios-system-tools",
   "version": "1.0.1",
-  "description": "A local-first desktop toolkit for system maintenance, monitoring, and basic security checks.",
+  "description": "A local-first Windows security and system health assistant.",
   "main": "src/main/main.js",
   "author": "Soterios",
   "license": "MIT",
@@ -25,7 +25,7 @@
   },
   "build": {
     "appId": "com.soterios.systemtools",
-    "productName": "Soterios System Tools",
+    "productName": "Soterios",
     "copyright": "Copyright (c) 2026 Soterios",
     "directories": {
       "output": "dist",
@@ -57,7 +57,7 @@
       "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Soterios System Tools",
+      "shortcutName": "Soterios",
       "menuCategory": true,
       "license": "LICENSE",
       "installerIcon": "assets/icon.ico",

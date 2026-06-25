@@ -51,8 +51,9 @@ window.Pages.quarantine = {
       <div class="history-item quarantine-item">
         <div class="quarantine-main">
           <div class="history-title">${escapeHtml(item.fileName || item.originalPath)}</div>
-          <div class="history-meta">${escapeHtml(item.reason || 'No reason recorded')}</div>
+          <div class="history-meta">${escapeHtml(item.detectionReason || item.reason || 'No reason recorded')}</div>
           <div class="history-meta mono">${escapeHtml(item.originalPath || '')}</div>
+          <div class="history-meta mono">SHA256: ${escapeHtml(item.hash || 'not recorded')}</div>
           <div class="history-meta">Status: <span class="${active ? 'warn' : ''}">${escapeHtml(item.status)}</span> - ${escapeHtml(new Date(item.createdAt).toLocaleString())}</div>
         </div>
         <div class="quarantine-actions">

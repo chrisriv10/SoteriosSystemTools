@@ -1,237 +1,120 @@
-# Soterios System Tools
+# Soterios
 
-A plugin-based desktop toolkit for local system maintenance, monitoring, and
-basic security checks. Built with Electron + vanilla JS — no frameworks, no
-cloud calls, everything runs on your machine.
+Soterios is a local-first Windows security and system health assistant. It helps everyday Windows users understand their device posture, review startup persistence, inspect suspicious processes, scan files with explainable local heuristics, quarantine risky files, and export security reports.
 
-## What's included
+Soterios is built with Electron and runs its checks on the local machine. It does not upload files, telemetry, scan history, or reports.
 
-- **Dashboard** — composite System Health Score (0-100) blending last scan
-  results, password strength, disk space, and CPU load, plus live stat tiles.
-- **File Scanner** — hashes files (SHA-256) and checks them against a local
-  signature database (`src/av/signatureDB.json`), plus heuristic flags
-  (suspicious extension, temp-directory location, high entropy). Flagged
-  files can be quarantined (moved to `~/.soterios-quarantine`, never deleted).
-- **Passwords** — cryptographically secure password generator (Node's
-  `crypto`) and a strength checker with entropy estimation.
-- **System Monitor** — CPU, memory, disk, and OS info via `systeminformation`.
-- **Processes** — running process list sorted by CPU usage via `ps-list`.
-- **Maintenance Scripts** — a small registry of safe, read-only-by-default
-  scripts: temp file cleanup (dry-run by default), disk space report,
-  startup items report.
-- **All Tools** — browses every plugin registered with the tool registry,
-  including any stubs.
+## Screenshots
 
-Nothing in this app phones home. Scanning, hashing, and analysis all happen
-locally.
+Add product screenshots here before publishing:
 
-## Getting started
+- Dashboard: `docs/screenshots/dashboard.png`
+- Scanner: `docs/screenshots/scanner.png`
+- Startup Apps: `docs/screenshots/startup.png`
+- Reports: `docs/screenshots/reports.png`
+
+## Features
+
+- Security Dashboard with an overall 0-100 score calculated from real checks
+- Microsoft Defender status, real-time protection, signature age, and engine information
+- Windows Firewall profile status
+- Windows Update pending update summary
+- Startup and persistence scanner for Registry Run keys, Startup folders, Scheduled Tasks, and Windows services
+- Process monitor with parent PID, command line, executable path, Authenticode publisher, and suspicious process scoring
+- Local file scanner with SHA-256 hashing, signature matches, entropy analysis, suspicious location detection, unsigned executable checks, PE metadata analysis, and explainable risk scoring
+- Quarantine records with original path, hash, detection reason, timestamp, restore, delete, and history
+- Security report export to HTML and JSON
+- Plugin-style tool registry with metadata, versions, permissions, and isolated error handling
+- Local settings, app data, and crash/error logging
+- Windows installer with app icon, shortcuts, and uninstall support
+
+## Installation
+
+Download the Windows installer from the release artifacts and run:
+
+```text
+Soterios-Setup-1.0.1.exe
+```
+
+The installer supports Start Menu shortcuts, optional desktop shortcut creation, and uninstall through Windows Apps & Features.
+
+## Build From Source
+
+Install dependencies:
 
 ```bash
-npm install
+npm ci
+```
+
+Run locally:
+
+```bash
 npm start
 ```
 
-`npm install` downloads the Electron binary itself, so it needs normal
-internet access (this won't work behind a restrictive proxy/firewall that
-blocks Electron's CDN).
-
-For dev tools (Chromium devtools open automatically):
+Build an unpacked Windows app:
 
 ```bash
-npm run dev
+npm run pack
 ```
 
-## Building the Windows installer
-
-You have two options. Both produce the same installer:
-`dist/Soterios System Tools-Setup-1.0.0.exe`.
-
-### Option A — On your own Windows machine
+Build the production Windows installer:
 
 ```bash
-npm install
 npm run dist:win
 ```
 
-This requires actual internet access (it downloads Electron's prebuilt
-Windows binary and NSIS itself on first run) and works on Windows, macOS,
-or Linux as a build host — electron-builder cross-compiles fine, but NSIS
-packaging is most reliable when run on Windows directly or via the GitHub
-Actions workflow below.
-
-### Option B — GitHub Actions (no Windows machine needed)
-
-A workflow is included at `.github/workflows/build-windows.yml`. Push this
-project to a GitHub repo, then either:
-
-- Push a version tag (`git tag v1.0.0 && git push --tags`) — this builds
-  the installer **and** attaches it to a GitHub Release automatically, so
-  the public can download it directly from your repo's Releases page, or
-- Trigger it manually from the **Actions** tab → "Build Windows Installer"
-  → "Run workflow", then download the installer from the run's artifacts.
-
-This is the easiest path to a working public download link with zero local
-setup.
-
-### What the installer does
-
-Built with `nsis` via electron-builder, configured for:
-
-- A standard install wizard (not silent/one-click) — shows the license
-  (`build/LICENSE.txt`), lets the user pick the install directory
-- Desktop + Start Menu shortcuts
-- A proper uninstaller registered with Windows (Add/Remove Programs)
-- A multi-resolution `.ico` (16–256px) so the icon looks correct in the
-  taskbar, Start Menu, and file explorer at every size
-
-## Making it truly public: code signing
-
-**An unsigned `.exe` will trigger Windows SmartScreen** ("Windows protected
-your PC" warning) on first run for anyone who downloads it, and some
-antivirus engines flag unsigned Electron apps more readily — this app's
-file-scanning feature in particular can superficially resemble malware
-behavior to a heuristic AV engine even though it's benign (hashing files
-and reading directories). Users can still click "More info → Run anyway,"
-but this is a real adoption barrier for an unfamiliar app.
-
-To remove that warning, you need a **code signing certificate**:
-
-1. **EV (Extended Validation) code signing certificate** — the gold
-   standard. Gives Windows SmartScreen reputation immediately, no warning
-   at all from day one. Costs roughly $300–500/year from a CA (DigiCert,
-   SSL.com, Sectigo) and requires a hardware token + identity verification
-   (business registration, in most cases).
-2. **Standard (OV) code signing certificate** — cheaper (~$70–200/year),
-   removes the "Unknown Publisher" line and shows your verified name, but
-   SmartScreen still needs to build reputation over time/downloads before
-   warnings stop entirely.
-3. **Azure Trusted Signing** — Microsoft's newer, cheaper option (~$10/month),
-   works similarly to OV signing, requires an Azure account and a registered
-   business or 3+ years of identity history for individuals.
-
-Once you have a certificate, add this to the `win` block in `package.json`:
-
-```json
-"win": {
-  "certificateFile": "path/to/cert.pfx",
-  "certificatePassword": "env:CSC_KEY_PASSWORD"
-}
-```
-
-(or use `CSC_LINK` / `CSC_KEY_PASSWORD` environment variables, which is what
-electron-builder picks up automatically — better for CI, since you'd add
-the cert as a GitHub Actions secret rather than committing it).
-
-Without signing, the app is still fully functional and fine to share with
-people who trust the source (e.g. a GitHub repo with visible source code) —
-it's specifically the "stranger downloads it cold" scenario where signing
-matters most.
-
-## Building for other platforms
-
-```bash
-npm run dist          # build for your current OS
-npm run dist:mac
-npm run dist:linux
-```
-
-Output goes to `dist/`.
+Installer output is written to `dist/`.
 
 ## Architecture
 
-```
-main.js                # Electron main process — window + IPC routing
-preload.js              # contextBridge — the only thing the renderer can call into Node with
-
-src/core/
-  pluginLoader.js        # scans src/tools/*.js and registers each exported tool
-  toolRegistry.js        # holds all registered tools, exposes list()/run()
-  eventBus.js             # internal pub/sub (not currently used cross-module, but available)
-
-src/tools/                # one file per tool area; each exports a tool or array of tools
-  passwordTools.js
-  systemMonitor.js
-  processViewer.js
-  fileScanner.js
-  cleanupTool.js
-  healthScore.js
-
-src/av/
-  scanner.js              # hashing, signature matching, heuristics, quarantine
-  signatureDB.json        # SHA-256 signatures to flag — edit this directly to add your own
-
-src/scripts/
-  registry.json           # list of available maintenance scripts
-  scriptRunner.js         # loads registry.json and dispatches to a script file
-  safeScripts/            # the actual script implementations
-
-src/ui/
-  pages/shell.html        # app shell: sidebar + main content mount point
-  css/style.css           # design tokens + all styling
-  js/api.js               # thin wrapper around window.soterios (the preload bridge)
-  js/components.js        # shared render helpers (icons, formatters)
-  js/router.js             # swaps the active page based on sidebar clicks
-  js/state.js              # tiny shared state (last scan summary, last password score)
-  js/pages/*.js            # one file per page, each registers on window.Pages
+```text
+src/main/             Electron main process, IPC, app menu, logging
+src/preload/          Secure contextBridge API exposed to the renderer
+src/ui/               HTML, CSS, and page modules
+src/core/             Tool registry, plugin loader, app store
+src/tools/            Built-in security, system, scanner, report, and maintenance tools
+src/security/         Windows check helpers and shared risk scoring
+src/av/               Local file scanner and signature database
+src/scripts/          Safe maintenance script registry and implementations
+assets/               Product icons
 ```
 
-### Adding a new tool
+The renderer never gets direct Node access. Pages call the preload API, which invokes registered tools through IPC.
 
-1. Create a file in `src/tools/` exporting an object (or array of objects)
-   shaped like:
+## Plugin System
 
-   ```js
-   module.exports = {
-     id: 'my-tool',            // unique, used in IPC calls
-     name: 'My Tool',
-     description: 'What it does',
-     category: 'Security',     // groups it in the All Tools page
-     icon: 'shield',           // see Icons in components.js, add a new one if needed
-     run: async (args, ctx) => {
-       // ctx.sendProgress({...}) is available for long-running tools
-       return { some: 'result' };
-     }
-   };
-   ```
+Tools are loaded from `src/tools/*.js`. A plugin exports either one tool object or an array of tool objects:
 
-2. That's it — `pluginLoader.js` picks it up automatically on next launch.
-   No registration step needed elsewhere.
-
-3. To surface it with a dedicated UI (rather than just the generic "All
-   Tools" listing), add a page module in `src/ui/js/pages/` following the
-   pattern in the existing pages, and add a sidebar entry + script tag in
-   `shell.html`.
-
-### Adding signatures to the scanner
-
-Edit `src/av/signatureDB.json` directly:
-
-```json
-{
-  "signatures": [
-    { "name": "some-known-bad-file", "hash": "sha256-hash-in-lowercase-hex" }
-  ]
-}
+```js
+module.exports = {
+  id: 'example-tool',
+  name: 'Example Tool',
+  description: 'Runs a local check.',
+  category: 'Security',
+  icon: 'shield',
+  version: '1.0.0',
+  permissions: ['system-read'],
+  run: async (args, ctx) => {
+    return { ok: true };
+  }
+};
 ```
 
-The shipped entry is the industry-standard EICAR test signature (a harmless
-string every AV product recognizes) — useful for confirming the scanner
-pipeline works end-to-end.
+The loader registers valid tools, logs loading failures, and keeps the app running if a single plugin fails.
 
-### Adding a maintenance script
+## Security Disclaimer
 
-1. Add a file under `src/scripts/safeScripts/` exporting an async function.
-2. Add an entry to `src/scripts/registry.json` pointing at it.
-3. It'll show up automatically on the Scripts page.
+Soterios is an assistant, not a replacement for Microsoft Defender, enterprise EDR, or a dedicated antivirus product. Its scanner uses local signatures and transparent heuristics. A suspicious result means "review this" rather than proof of malware. A clean result does not guarantee a file is safe.
 
-Scripts that delete or modify anything should default to a `dryRun: true`
-behavior, following the pattern in `clearTemp.js`.
+Some Windows checks require permissions available to the current user. Missing permissions may produce "unavailable" status instead of a failure.
 
-## Notes on scope
+## Roadmap
 
-This is a **local heuristic/signature scanner**, not a replacement for a
-real antivirus engine — it won't catch most real-world malware, since it
-only matches hashes you've explicitly added plus a few simple heuristics
-(suspicious extension, temp-folder location, high entropy). Treat it as a
-maintenance/sanity tool, not a security boundary.
+- Optional hash reputation providers with explicit user opt-in
+- Safer enable/disable workflows for startup entries
+- PDF report export
+- Signed production releases
+- Plugin marketplace folder with user-installed tools
+- More detailed PE version resource extraction
+- Automated UI smoke tests

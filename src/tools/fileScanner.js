@@ -50,6 +50,11 @@ function compactResultsForHistory(results) {
       signatureName: r.signatureName,
       flags: r.flags,
       risk: r.risk,
+      explanation: r.explanation,
+      recommendedAction: r.recommendedAction,
+      signature: r.signature,
+      peMetadata: r.peMetadata,
+      reputation: r.reputation,
       error: r.error,
       sizeBytes: r.sizeBytes,
       hash: r.hash
@@ -130,7 +135,9 @@ module.exports = [
           reason: args.reason || 'Flagged by scanner',
           hash: args.hash || null,
           sizeBytes: before.size,
-          risk: args.risk || null
+          risk: args.risk || null,
+          detectionReason: args.reason || 'Flagged by scanner',
+          metadata: args.metadata || null
         })
         : { quarantinePath: dest };
 

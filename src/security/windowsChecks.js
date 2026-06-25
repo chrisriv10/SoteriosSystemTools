@@ -11,18 +11,22 @@ function runPowerShell(script, timeout = 20000) {
   }
 
   return new Promise((resolve) => {
-    execFile(
-      'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
-      { windowsHide: true, timeout, maxBuffer: 1024 * 1024 * 8 },
-      (error, stdout, stderr) => {
-        if (error) {
-          resolve({ ok: false, error: stderr || error.message });
-          return;
+    try {
+      execFile(
+        'powershell.exe',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        { windowsHide: true, timeout, maxBuffer: 1024 * 1024 * 8 },
+        (error, stdout, stderr) => {
+          if (error) {
+            resolve({ ok: false, error: stderr || error.message });
+            return;
+          }
+          resolve({ ok: true, stdout });
         }
-        resolve({ ok: true, stdout });
-      }
-    );
+      );
+    } catch (err) {
+      resolve({ ok: false, error: err.message || String(err) });
+    }
   });
 }
 

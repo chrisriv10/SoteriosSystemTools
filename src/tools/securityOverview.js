@@ -17,17 +17,20 @@ function levelForScore(score) {
 
 async function buildSecurityOverview(ctx) {
   const store = ctx.appStore ? ctx.appStore.getSnapshot() : { history: {}, quarantine: [] };
-  const [defender, firewall, updates, fsSize, load, mem, startup] = await Promise.all([
+  const [defender, firewall, updates, fsSize, load, mem, startup, processes] = await Promise.all([
     getDefenderStatus(),
     getFirewallStatus(),
     getUpdateStatus(),
     si.fsSize(),
     si.currentLoad(),
     si.mem(),
-    ctx.toolRegistry ? ctx.toolRegistry.run('startup-persistence-scan', {}, ctx) : Promise.resolve({ ok: true, data: { summary: {}, items: [] } })
+    ctx.toolRegistry ? ctx.toolRegistry.run('startup-persistence-scan', {}, ctx) : Promise.resolve({ ok: true, data: { summary: {}, items: [] } }),
+    ctx.toolRegistry ? ctx.toolRegistry.run('process-viewer', {}, ctx) : Promise.resolve({ ok: true, data: [] })
   ]);
 
   const startupData = startup && startup.ok ? startup.data : { summary: {}, items: [] };
+  const processData = processes && processes.ok && Array.isArray(processes.data) ? processes.data : [];
+  const suspiciousProcesses = processData.filter((item) => item.risk && item.risk.score >= 35);
   const issues = [];
   let score = 100;
 
@@ -67,6 +70,11 @@ async function buildSecurityOverview(ctx) {
   if (highStartup.length) {
     addIssue(issues, 'warn', 'Startup persistence risk detected', `${highStartup.length} startup item(s) should be reviewed.`, Math.min(18, highStartup.length * 4), 'startup');
     score -= Math.min(18, highStartup.length * 4);
+  }
+
+  if (suspiciousProcesses.length) {
+    addIssue(issues, 'warn', 'Suspicious process behavior detected', `${suspiciousProcesses.length} running process(es) should be reviewed.`, Math.min(16, suspiciousProcesses.length * 4), 'processes');
+    score -= Math.min(16, suspiciousProcesses.length * 4);
   }
 
   const latestScan = store.history.scans && store.history.scans[0];
@@ -123,7 +131,7 @@ async function buildSecurityOverview(ctx) {
     firewall,
     updates,
     startup: startupData.summary || {},
-    suspiciousProcesses: 0,
+    suspiciousProcesses: suspiciousProcesses.length,
     disk: disk ? { mount: disk.mount, usePercent: +disk.use.toFixed(1), size: disk.size, used: disk.used } : null,
     system: {
       cpuLoad: +load.currentLoad.toFixed(1),

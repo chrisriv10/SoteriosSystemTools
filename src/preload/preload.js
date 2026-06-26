@@ -1,5 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+contextBridge.exposeInMainWorld('api', {
+  invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
+  on: (channel, callback) => {
+    const listener = (event, ...args) => callback(...args);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  }
+});
+
+// Keep legacy namespace for compatibility with some utilities that weren't modified
 contextBridge.exposeInMainWorld('soterios', {
   tools: {
     list: () => ipcRenderer.invoke('tools:list'),
@@ -8,7 +18,6 @@ contextBridge.exposeInMainWorld('soterios', {
       const channel = `tools:progress:${toolId}`;
       const listener = (event, payload) => callback(payload);
       ipcRenderer.on(channel, listener);
-      // return an unsubscribe fn
       return () => ipcRenderer.removeListener(channel, listener);
     }
   },
@@ -18,13 +27,6 @@ contextBridge.exposeInMainWorld('soterios', {
   },
   shell: {
     showItemInFolder: (filePath) => ipcRenderer.invoke('shell:showItemInFolder', filePath)
-  },
-  store: {
-    snapshot: () => ipcRenderer.invoke('store:snapshot'),
-    settings: () => ipcRenderer.invoke('store:settings'),
-    updateSettings: (patch) => ipcRenderer.invoke('store:updateSettings', patch),
-    history: (kind, limit) => ipcRenderer.invoke('store:history', kind, limit),
-    quarantine: () => ipcRenderer.invoke('store:quarantine')
   },
   app: {
     info: () => ipcRenderer.invoke('app:info')

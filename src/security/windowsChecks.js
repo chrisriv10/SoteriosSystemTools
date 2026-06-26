@@ -193,7 +193,7 @@ function isExecutablePath(filePath) {
 function suspiciousPathSignals(filePath) {
   const signals = [];
   const normalized = String(filePath || '').toLowerCase();
-  if (!normalized) { signals.push({ points: 12, message: 'Executable path is unavailable.' }); return signals; }
+  if (!normalized) { return signals; }
   if (normalized.includes('\\appdata\\roaming\\') || normalized.includes('\\appdata\\local\\temp\\'))
     signals.push({ points: 25, message: 'Runs from a user AppData or temporary location.' });
   if (normalized.includes('\\windows\\temp\\') || normalized.includes('\\users\\public\\'))

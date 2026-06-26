@@ -1,92 +1,231 @@
 window.Pages = window.Pages || {};
-window.Pages.scanner = {
-  selectedPath: null, lastResults: null, settings: null,
-  async render(container) {
-    this.settings = await Api.getSettings();
-    this.selectedPath = this.selectedPath || this.settings.scanner.defaultPath || null;
+window.Pages['scanner'] = {
+  cleanups: [],
+  destroy() {
+    this.cleanups.forEach(fn => fn());
+    this.cleanups = [];
+  },
+  render(container) {
     container.innerHTML = `
-      <div class="page-header"><h1 class="page-title">File Scanner</h1>
-        <div class="page-subtitle">Local signatures, heuristics, quarantine, and scan history</div></div>
-      <div class="panel" style="margin-bottom:18px;">
-        <div class="panel-title">Target Folder</div>
-        <div class="path-picker">
-          <input type="text" id="scanPath" placeholder="No folder selected" readonly value="${escapeHtml(this.selectedPath || '')}" />
-          <button class="btn" id="browseBtn">Browse</button>
-          <button class="btn btn-primary" id="scanBtn" ${this.selectedPath ? '' : 'disabled'}>Run Scan</button>
+      <header class="page-header">
+        <h1 class="page-title">Virus Scan</h1>
+        <p class="page-subtitle">Scan your system for threats using the ClamAV engine</p>
+      </header>
+      <div class="card" id="clamStatusCard" style="margin-bottom:24px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;">
+          <div>
+            <h3 style="margin:0;">ClamAV Engine</h3>
+            <p class="page-subtitle" id="clamStatusText" style="margin:4px 0 0;">Checking engine status...</p>
+          </div>
+          <button class="btn" id="btnUpdateDefinitions">Update Definitions</button>
         </div>
-        <div class="scanner-options">
-          <label class="checkbox-row"><input type="checkbox" id="includeClean" ${this.settings.scanner.includeCleanResults ? 'checked' : ''} /> Include clean files</label>
-          <label class="inline-field">Depth <input type="number" id="maxDepth" min="1" max="32" value="${escapeHtml(this.settings.scanner.maxDepth)}" /></label>
-          <label class="inline-field">Max MB <input type="number" id="maxFileSizeMB" min="1" max="4096" value="${escapeHtml(this.settings.scanner.maxFileSizeMB)}" /></label>
+      </div>
+      <div class="dashboard-grid">
+        <div class="card">
+          <h3>Quick Scan</h3>
+          <p class="page-subtitle">Scans common startup locations and temp folders.</p>
+          <button class="btn btn-primary" style="margin-top:12px;" id="btnScannerQuick">Start Quick Scan</button>
         </div>
-        <div id="scanProgress" class="muted-line"></div>
+        <div class="card">
+          <h3>Full Scan</h3>
+          <p class="page-subtitle">Scans entire C: drive (may take a while).</p>
+          <button class="btn" style="margin-top:12px;" id="btnScannerFull">Start Full Scan</button>
+        </div>
+        <div class="card">
+          <h3>Custom Scan</h3>
+          <p class="page-subtitle">Choose a specific folder to scan.</p>
+          <button class="btn" style="margin-top:12px;" id="btnScannerCustom">Select Folder\u2026</button>
+        </div>
       </div>
-      <div class="grid grid-4" id="scanSummaryTiles" style="display:none; margin-bottom:18px;"></div>
-      <div class="panel" style="margin-bottom:18px;">
-        <div class="panel-title">Results</div>
-        <div class="log-surface" id="scanResults"><div class="empty-state">Select a folder and run a scan.</div></div>
-      </div>
-      <div class="panel"><div class="panel-title">Scan History</div>
-        <div id="scanHistory"><div class="empty-state">Loading...</div></div></div>`;
-    container.querySelector('#browseBtn').addEventListener('click', () => this.browse(container));
-    container.querySelector('#scanBtn').addEventListener('click', () => this.runScan(container));
-    if (this.lastResults) this.renderResults(container, this.lastResults);
-    this.renderHistory(container);
-  },
-  async browse(container) {
-    const p = await Api.pickFolder();
-    if (!p) return;
-    this.selectedPath = p;
-    container.querySelector('#scanPath').value = p;
-    container.querySelector('#scanBtn').disabled = false;
-  },
-  async runScan(container) {
-    const scanBtn = container.querySelector('#scanBtn');
-    const progressEl = container.querySelector('#scanProgress');
-    const resultsEl = container.querySelector('#scanResults');
-    setButtonLoading(scanBtn, true, 'Scanning...');
-    resultsEl.innerHTML = '<div class="empty-state">Scanning...</div>';
-    const unsub = Api.onToolProgress('file-scanner', (p) => {
-      progressEl.textContent = `Scanned ${p.scanned}/${p.total} — ${p.flagged} flagged`;
-    });
-    try {
-      const data = await Api.runTool('file-scanner', { path: this.selectedPath, includeCleanResults: container.querySelector('#includeClean').checked, maxDepth: Number(container.querySelector('#maxDepth').value || 12), maxFileSizeMB: Number(container.querySelector('#maxFileSizeMB').value || 512) });
-      this.lastResults = data;
-      window.AppState.lastScanSummary = data.summary;
-      progressEl.textContent = `Scan complete. ${data.summary.flagged} item(s) flagged.`;
-      this.renderResults(container, data);
-      this.renderHistory(container);
-    } catch (err) { showToolError(resultsEl, err); } finally { unsub(); setButtonLoading(scanBtn, false); }
-  },
-  renderResults(container, data) {
-    const { summary, results } = data;
-    const tiles = container.querySelector('#scanSummaryTiles');
-    tiles.style.display = 'grid';
-    tiles.innerHTML = `
-      <div class="stat-tile"><div class="stat-label">Scanned</div><div class="stat-value">${summary.totalScanned}</div></div>
-      <div class="stat-tile"><div class="stat-label">Flagged</div><div class="stat-value ${summary.flagged ? 'warn' : 'ok'}">${summary.flagged}</div></div>
-      <div class="stat-tile"><div class="stat-label">Matches</div><div class="stat-value danger">${summary.matches}</div></div>
-      <div class="stat-tile"><div class="stat-label">Skipped</div><div class="stat-value">${summary.skipped}</div></div>`;
-    const resultsEl = container.querySelector('#scanResults');
-    if (!results.length) { resultsEl.innerHTML = '<div class="empty-state">No flagged files found.</div>'; return; }
-    const priority = { match: 0, suspicious: 1, error: 2, skipped: 3, clean: 4 };
-    resultsEl.innerHTML = [...results].sort((a, b) => (priority[a.status] ?? 9) - (priority[b.status] ?? 9) || ((b.risk && b.risk.score) || 0) - ((a.risk && a.risk.score) || 0)).slice(0, 500).map((r) => {
-      const risk = r.risk || { score: 0, level: 'none' };
-      const detail = r.status === 'match' ? `Matched signature "${escapeHtml(r.signatureName)}"` : r.status === 'suspicious' ? escapeHtml((r.flags || []).map((f) => f.message).join('; ')) : escapeHtml(r.error || '');
-      const qBtn = (r.status === 'match' || r.status === 'suspicious') ? `<button class="btn btn-sm btn-danger" data-quarantine-path="${escapeHtml(r.path)}" data-hash="${escapeHtml(r.hash || '')}" data-risk="${escapeHtml(JSON.stringify(risk))}">Quarantine</button>` : '';
-      return `<div class="log-row result-row"><span class="log-tag ${r.status}">${r.status.toUpperCase()}</span><span class="risk-pill risk-${escapeHtml(risk.level)}">${risk.score}</span><span class="log-path">${escapeHtml(r.path)}${detail ? ` <span class="row-detail"> — ${detail}</span>` : ''}</span>${qBtn}</div>`;
-    }).join('');
-    resultsEl.querySelectorAll('[data-quarantine-path]').forEach((btn) => btn.addEventListener('click', async (e) => {
-      e.stopPropagation(); btn.disabled = true; btn.textContent = 'Quarantining...';
-      try { await Api.runTool('quarantine-file', { path: btn.dataset.quarantinePath, hash: btn.dataset.hash || null, risk: btn.dataset.risk ? JSON.parse(btn.dataset.risk) : null, reason: 'Flagged by scanner' }); btn.textContent = 'Quarantined'; } catch (err) { btn.textContent = 'Failed'; }
+      <div class="card" id="scanStatusCard" style="margin-top:24px; display:none;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div class="status-icon info" id="scanIcon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </div>
+          <div style="flex:1;">
+            <div id="scanStatus" style="font-weight:600;">Ready</div>
+            <div id="scanDetail" class="page-subtitle" style="font-size:0.85rem;"></div>
+          </div>
+        </div>
+        <div style="margin-top:12px; display:flex; gap:10px;">
+          <button class="btn btn-sm" id="btnCancelScan" disabled>Cancel Scan</button>
+          <button class="btn btn-sm" id="btnOpenScanReports">View Scan Reports</button>
+        </div>
+        <div class="stat-bar-track" id="progressTrack" style="margin-top:12px; height:6px; border-radius:3px; overflow:hidden;">
+          <div class="stat-bar-fill" id="scanProgressFill" style="width:0%; height:100%; background:var(--accent-primary); transition: width 0.3s ease;"></div>
+        </div>
+      </div>`;
+
+    const progressFill = document.getElementById('scanProgressFill');
+    const scanStatus = document.getElementById('scanStatus');
+    const scanDetail = document.getElementById('scanDetail');
+    const scanCard = document.getElementById('scanStatusCard');
+    const scanIcon = document.getElementById('scanIcon');
+    const clamStatusText = document.getElementById('clamStatusText');
+    const updateDefinitionsButton = document.getElementById('btnUpdateDefinitions');
+    const cancelButton = document.getElementById('btnCancelScan');
+    const reportButton = document.getElementById('btnOpenScanReports');
+    let isScanRunning = false;
+
+    function setProgress(pct) {
+      progressFill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+    }
+
+    function setScanning(active) {
+      isScanRunning = active;
+      if (active) {
+        scanCard.style.display = 'block';
+        scanStatus.textContent = 'Scanning\u2026';
+        scanDetail.textContent = 'Please wait while files are checked.';
+        scanIcon.className = 'status-icon info';
+        scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+        setProgress(30);
+        document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom').forEach(b => b.disabled = true);
+        cancelButton.disabled = false;
+      } else {
+        document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom').forEach(b => b.disabled = false);
+        cancelButton.disabled = true;
+      }
+    }
+
+    function setComplete(success, filesScanned, threatsFound, note, canceled) {
+      setProgress(100);
+      setScanning(false);
+      if (canceled) {
+        scanStatus.textContent = 'Scan Canceled';
+        scanDetail.textContent = `${filesScanned} file(s) scanned before cancellation. A scan report was saved.`;
+        scanIcon.className = 'status-icon warning';
+        scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+        return;
+      }
+      if (success) {
+        scanStatus.textContent = 'Scan Complete';
+        scanDetail.textContent = `${filesScanned} file(s) scanned, ${threatsFound} threat(s) found.` + (note ? ' ' + note : '');
+        scanIcon.className = 'status-icon ' + (threatsFound > 0 ? 'danger' : 'safe');
+        scanIcon.innerHTML = threatsFound > 0
+          ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+          : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+      } else {
+        scanStatus.textContent = 'Scan Failed';
+        scanDetail.textContent = note || 'An error occurred during the scan.';
+        scanIcon.className = 'status-icon danger';
+        scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+      }
+    }
+
+    async function refreshStatus() {
+      try {
+        const status = await window.api.invoke('scan:status');
+        if (status.scan && status.scan.isScanning) setScanning(true);
+        const engine = status.engine || status;
+        if (!engine.ready) {
+          clamStatusText.textContent = 'ClamAV is not ready. The bundled scanner could not be found.';
+        } else if (!engine.hasDefinitions) {
+          clamStatusText.textContent = 'Definitions are missing. They will be downloaded automatically before scanning.';
+        } else {
+          clamStatusText.textContent = 'Ready with local ClamAV definitions.';
+        }
+      } catch (e) {
+        clamStatusText.textContent = e.message || 'Unable to read ClamAV status.';
+      }
+    }
+
+    function setError(msg) {
+      scanCard.style.display = 'block';
+      scanStatus.textContent = 'Error';
+      scanDetail.textContent = msg;
+      scanIcon.className = 'status-icon danger';
+      scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+      document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom').forEach(b => b.disabled = false);
+      cancelButton.disabled = true;
+      isScanRunning = false;
+    }
+
+    // Subscribe to scan progress events from main process
+    this.cleanups.push(window.api.on('scan:progress', (data) => {
+      if (data && data.pct !== undefined) {
+        scanCard.style.display = 'block';
+        setProgress(data.pct);
+        scanDetail.textContent = data.message || 'Scanning\u2026';
+      }
     }));
-  },
-  async renderHistory(container) {
-    const el = container.querySelector('#scanHistory');
-    try {
-      const scans = await Api.getHistory('scans', 6);
-      if (!scans.length) { el.innerHTML = '<div class="empty-state">No scans recorded yet.</div>'; return; }
-      el.innerHTML = scans.map((scan) => { const s = scan.summary || {}; return `<div class="history-item"><div><div class="history-title">${escapeHtml(s.targetPath || 'Scan')}</div><div class="history-meta">${escapeHtml(new Date(s.completedAt || scan.createdAt).toLocaleString())}</div></div><div class="history-counts"><span class="ok">${s.clean || 0} clean</span><span class="warn">${s.suspicious || 0} suspicious</span><span class="danger">${s.matches || 0} matches</span></div></div>`; }).join('');
-    } catch (err) { showToolError(el, err); }
+
+    this.cleanups.push(window.api.on('scan:complete', (data) => {
+      if (!data) return;
+      if (window.AppRouter && window.AppRouter.current && window.AppRouter.current() !== 'scanner') return;
+      alert(data.status === 'canceled' ? 'Scan canceled.' : `Scan completed. ${data.filesScanned || 0} file(s) scanned, ${data.threatsFound || 0} threat(s) found.`);
+    }));
+
+    updateDefinitionsButton.addEventListener('click', async () => {
+      if (isScanRunning) {
+        setError('A scan is already in progress. Cancel it or wait for it to complete before updating definitions.');
+        return;
+      }
+      scanCard.style.display = 'block';
+      scanStatus.textContent = 'Updating Definitions';
+      scanDetail.textContent = 'Downloading the latest ClamAV signatures...';
+      setProgress(10);
+      updateDefinitionsButton.disabled = true;
+      try {
+        const res = await window.api.invoke('scan:updateDefinitions');
+        if (!res.success) throw new Error(res.error || 'Definition update failed.');
+        scanStatus.textContent = 'Definitions Updated';
+        scanDetail.textContent = 'ClamAV signatures are ready.';
+        setProgress(100);
+        await refreshStatus();
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        updateDefinitionsButton.disabled = false;
+      }
+    });
+
+    cancelButton.addEventListener('click', async () => {
+      if (!isScanRunning) return;
+      cancelButton.disabled = true;
+      scanStatus.textContent = 'Canceling Scan';
+      scanDetail.textContent = 'Stopping the active scanner process...';
+      try {
+        await window.api.invoke('scan:abort');
+      } catch (e) {
+        setError(e.message);
+      }
+    });
+
+    reportButton.addEventListener('click', () => window.AppRouter.navigate('reports'));
+
+    async function startScan(runner, beforeStart) {
+      if (isScanRunning) {
+        setError('A scan is already in progress. Cancel it or wait for it to complete before starting another scan.');
+        return;
+      }
+      setScanning(true);
+      if (beforeStart) beforeStart();
+      try {
+        const res = await runner();
+        setComplete(!!res.success, res.filesScanned || 0, res.threatsFound || 0, res.note || res.error, !!res.canceled);
+        await refreshStatus();
+      } catch (e) {
+        setError(e.message);
+      }
+    }
+
+    document.getElementById('btnScannerQuick').addEventListener('click', async () => {
+      startScan(() => window.api.invoke('scan:quick'));
+    });
+
+    document.getElementById('btnScannerFull').addEventListener('click', async () => {
+      startScan(() => window.api.invoke('scan:full'));
+    });
+
+    document.getElementById('btnScannerCustom').addEventListener('click', async () => {
+      const folder = await window.api.invoke('dialog:pickFolder');
+      if (!folder) return;
+      startScan(() => window.api.invoke('scan:custom', [folder]), () => {
+        scanDetail.textContent = 'Scanning ' + folder + '\u2026';
+      });
+    });
+
+    refreshStatus();
   }
 };

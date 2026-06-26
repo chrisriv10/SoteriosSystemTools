@@ -3,16 +3,16 @@ window.Pages.passwords = {
   render(container) {
     container.innerHTML = `
       <div class="page-header"><h1 class="page-title">Passwords</h1>
-        <div class="page-subtitle">Generate strong passwords and check existing ones</div></div>
+        <div class="page-subtitle">Generate strong passwords and check credentials against breach data</div></div>
       <div class="grid grid-2">
         <div class="panel"><div class="panel-title">Generator</div>
           <div class="field"><label class="field-label">Length: <span id="lengthValue">16</span></label>
             <input type="range" id="lengthSlider" min="4" max="64" value="16" style="width:100%;" /></div>
-          <div class="checkbox-row"><input type="checkbox" id="optLower" checked /> <label for="optLower">Lowercase</label></div>
-          <div class="checkbox-row"><input type="checkbox" id="optUpper" checked /> <label for="optUpper">Uppercase</label></div>
-          <div class="checkbox-row"><input type="checkbox" id="optDigits" checked /> <label for="optDigits">Digits</label></div>
-          <div class="checkbox-row"><input type="checkbox" id="optSymbols" checked /> <label for="optSymbols">Symbols</label></div>
-          <div class="checkbox-row"><input type="checkbox" id="optAmbiguous" /> <label for="optAmbiguous">Exclude ambiguous (l,1,O,0)</label></div>
+          <label class="checkbox-row"><input type="checkbox" id="optLower" checked />Lowercase</label>
+          <label class="checkbox-row"><input type="checkbox" id="optUpper" checked />Uppercase</label>
+          <label class="checkbox-row"><input type="checkbox" id="optDigits" checked />Digits</label>
+          <label class="checkbox-row"><input type="checkbox" id="optSymbols" checked />Symbols</label>
+          <label class="checkbox-row"><input type="checkbox" id="optAmbiguous" />Exclude ambiguous (l,1,O,0)</label>
           <button class="btn btn-primary" id="generateBtn" style="margin-top:6px;width:100%;justify-content:center;">Generate Password</button>
           <div id="generatedOut" style="margin-top:16px;display:none;">
             <div class="password-display" id="generatedPassword"></div>
@@ -22,20 +22,44 @@ window.Pages.passwords = {
         </div>
         <div class="panel"><div class="panel-title">Strength Checker</div>
           <div class="field"><label class="field-label">Enter a password to analyze</label>
-            <input type="password" id="checkInput" placeholder="Type a password…" /></div>
+            <input type="password" id="checkInput" placeholder="Type a password..." /></div>
           <div id="checkStrength"></div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Analyzed locally — nothing is sent anywhere.</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Strength is analyzed locally.</div>
+        </div>
+        <div class="panel"><div class="panel-title">Password Leak Check</div>
+          <div class="field"><label class="field-label">Check against HIBP Pwned Passwords</label>
+            <input type="password" id="leakPasswordInput" placeholder="Type a password to check" /></div>
+          <button class="btn btn-primary" id="checkPasswordLeak">Check Password</button>
+          <div id="passwordLeakResult" style="margin-top:12px;"></div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Uses HIBP k-anonymity: only the first 5 SHA-1 hash characters are sent.</div>
+        </div>
+        <div class="panel"><div class="panel-title">Email Breach Check</div>
+          <div class="field"><label class="field-label">Email address</label>
+            <input type="text" id="leakEmailInput" placeholder="name@example.com" /></div>
+          <div class="field"><label class="field-label">HIBP API key</label>
+            <input type="password" id="hibpApiKey" placeholder="Required for email breach checks" /></div>
+          <button class="btn btn-primary" id="checkEmailLeak">Check Email</button>
+          <div id="emailLeakResult" style="margin-top:12px;"></div>
         </div>
       </div>`;
     this.wireGenerator(container);
     this.wireChecker(container);
+    this.wireLeakChecks(container);
   },
+
   wireGenerator(container) {
     const slider = container.querySelector('#lengthSlider');
     slider.addEventListener('input', () => { container.querySelector('#lengthValue').textContent = slider.value; });
     container.querySelector('#generateBtn').addEventListener('click', async () => {
       try {
-        const result = await Api.runTool('password-generator', { length: parseInt(slider.value, 10), useLower: container.querySelector('#optLower').checked, useUpper: container.querySelector('#optUpper').checked, useDigits: container.querySelector('#optDigits').checked, useSymbols: container.querySelector('#optSymbols').checked, excludeAmbiguous: container.querySelector('#optAmbiguous').checked });
+        const result = await Api.runTool('password-generator', {
+          length: parseInt(slider.value, 10),
+          useLower: container.querySelector('#optLower').checked,
+          useUpper: container.querySelector('#optUpper').checked,
+          useDigits: container.querySelector('#optDigits').checked,
+          useSymbols: container.querySelector('#optSymbols').checked,
+          excludeAmbiguous: container.querySelector('#optAmbiguous').checked
+        });
         const out = container.querySelector('#generatedOut');
         out.style.display = 'block';
         container.querySelector('#generatedPassword').textContent = result.password;
@@ -47,9 +71,11 @@ window.Pages.passwords = {
       const text = container.querySelector('#generatedPassword').textContent;
       navigator.clipboard.writeText(text);
       const btn = container.querySelector('#copyBtn');
-      btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 1200);
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 1200);
     });
   },
+
   wireChecker(container) {
     const input = container.querySelector('#checkInput');
     const out = container.querySelector('#checkStrength');
@@ -58,11 +84,56 @@ window.Pages.passwords = {
       clearTimeout(timer);
       timer = setTimeout(async () => {
         if (!input.value) { out.innerHTML = ''; return; }
-        try { const result = await Api.runTool('password-strength-checker', { password: input.value }); window.AppState.lastPasswordScore = result.score; renderStrengthMeter(out, result, true); } catch (err) { showToolError(out, err); }
+        try {
+          const result = await Api.runTool('password-strength-checker', { password: input.value });
+          window.AppState.lastPasswordScore = result.score;
+          renderStrengthMeter(out, result, true);
+        } catch (err) { showToolError(out, err); }
       }, 200);
+    });
+  },
+
+  async wireLeakChecks(container) {
+    const savedKey = await window.api.invoke('db:getSetting', 'hibp.apiKey', '');
+    container.querySelector('#hibpApiKey').value = savedKey || '';
+    container.querySelector('#checkPasswordLeak').addEventListener('click', async () => {
+      const btn = container.querySelector('#checkPasswordLeak');
+      const out = container.querySelector('#passwordLeakResult');
+      const password = container.querySelector('#leakPasswordInput').value;
+      if (!password) { out.innerHTML = '<div class="empty-state">Enter a password first.</div>'; return; }
+      setButtonLoading(btn, true, 'Checking...');
+      try {
+        const result = await window.api.invoke('hibp:password', password);
+        out.innerHTML = result.found
+          ? `<div class="log-row"><span class="log-tag match">pwned</span><span class="log-path">This password appears ${result.count.toLocaleString()} time(s) in known breaches. Do not use it.</span></div>`
+          : '<div class="log-row"><span class="log-tag clean">clear</span><span class="log-path">This password was not found in HIBP Pwned Passwords.</span></div>';
+      } catch (err) { showToolError(out, err); }
+      finally { setButtonLoading(btn, false); }
+    });
+    container.querySelector('#checkEmailLeak').addEventListener('click', async () => {
+      const btn = container.querySelector('#checkEmailLeak');
+      const out = container.querySelector('#emailLeakResult');
+      const email = container.querySelector('#leakEmailInput').value.trim();
+      const apiKey = container.querySelector('#hibpApiKey').value.trim();
+      if (!email) { out.innerHTML = '<div class="empty-state">Enter an email first.</div>'; return; }
+      if (apiKey) await window.api.invoke('db:setSetting', 'hibp.apiKey', apiKey);
+      setButtonLoading(btn, true, 'Checking...');
+      try {
+        const result = await window.api.invoke('hibp:email', email, apiKey);
+        if (result.requiresApiKey) {
+          out.innerHTML = '<div class="log-row"><span class="log-tag warn">api key</span><span class="log-path">HIBP requires an API key for email breach checks.</span></div>';
+        } else if (!result.found) {
+          out.innerHTML = '<div class="log-row"><span class="log-tag clean">clear</span><span class="log-path">No breaches returned for this email.</span></div>';
+        } else {
+          out.innerHTML = `<div class="log-row"><span class="log-tag match">breached</span><span class="log-path">${result.breaches.length} breach(es) returned.</span></div>` +
+            result.breaches.map(b => `<div class="log-row"><span class="log-tag warn">breach</span><span class="log-path">${escapeHtml(b.Name || b.name || JSON.stringify(b))}</span></div>`).join('');
+        }
+      } catch (err) { showToolError(out, err); }
+      finally { setButtonLoading(btn, false); }
     });
   }
 };
+
 function renderStrengthMeter(el, strength, showIssues) {
   const color = strength.label === 'Very Strong' || strength.label === 'Strong' ? 'var(--ok)' : strength.label === 'Moderate' ? 'var(--warn)' : 'var(--danger)';
   const issuesHtml = (showIssues && strength.issues && strength.issues.length) ? `<ul class="issue-list">${strength.issues.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>` : '';

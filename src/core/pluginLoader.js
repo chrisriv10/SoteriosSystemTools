@@ -25,4 +25,4 @@ async function loadAll() {
   console.log(`[pluginLoader] Loaded ${toolRegistry.list().length} tool(s)`);
 }
 
-module.exports = { loadAll };
+module.exports = { loadAll, loadPlugins: loadAll };

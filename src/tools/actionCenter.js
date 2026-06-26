@@ -27,8 +27,8 @@ module.exports = [
       }
 
       const fullDisks = fsSize.filter((d) => d.use >= 90);
-      if (fullDisks.length > 0) items.push(recommendation('disk-low', 'danger', 'Low disk space detected', fullDisks.map((d) => `${d.mount} is ${d.use.toFixed(1)}% used`).join('; '), 'scripts'));
-      else if (fsSize.some((d) => d.use >= 80)) items.push(recommendation('disk-watch', 'warn', 'Disk usage is getting high', 'Run the disk space and large files reports.', 'scripts'));
+      if (fullDisks.length > 0) items.push(recommendation('disk-low', 'danger', 'Low disk space detected', fullDisks.map((d) => `${d.mount} is ${d.use.toFixed(1)}% used`).join('; '), 'tools'));
+      else if (fsSize.some((d) => d.use >= 80)) items.push(recommendation('disk-watch', 'warn', 'Disk usage is getting high', 'Run the disk space and large files reports.', 'tools'));
 
       const memUse = ((mem.total - mem.available) / mem.total) * 100;
       if (memUse >= 88) items.push(recommendation('memory-high', 'warn', 'Memory pressure is high', `${memUse.toFixed(1)}% of memory in use.`, 'processes'));

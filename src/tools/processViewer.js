@@ -1,9 +1,16 @@
-const { makeRisk, recommendationForRisk } = require('../security/riskEngine');
-const { suspiciousPathSignals } = require('../security/windowsChecks');
+const si = require('systeminformation');
+const { makeRisk } = require('../security/riskEngine');
 
 function processSignals(proc) {
-  const signals = suspiciousPathSignals(proc.path);
+  const signals = [];
+  const path = String(proc.path || '').toLowerCase();
   const cmd = String(proc.cmd || '').toLowerCase();
+  if (path.includes('\\appdata\\roaming\\') || path.includes('\\appdata\\local\\temp\\'))
+    signals.push({ points: 25, message: 'Runs from a user AppData or temporary location.' });
+  if (path.includes('\\windows\\temp\\') || path.includes('\\users\\public\\'))
+    signals.push({ points: 20, message: 'Runs from a commonly abused writable Windows location.' });
+  if (/\.(jpg|png|pdf|docx?|xlsx?)\.(exe|scr|js|vbs|bat|cmd|ps1)$/i.test(path))
+    signals.push({ points: 45, message: 'Uses a double extension commonly used to disguise malware.' });
   if (cmd.includes('-encodedcommand') || cmd.includes('frombase64string'))
     signals.push({ points: 45, message: 'Command line contains encoded script execution.' });
   if ((proc.name || '').toLowerCase() === 'powershell.exe' && cmd.includes('downloadstring'))
@@ -11,18 +18,38 @@ function processSignals(proc) {
   return signals;
 }
 
+function recommendationForRisk(risk) {
+  if (risk.score >= 50) return 'Immediate termination recommended.';
+  if (risk.score >= 35) return 'Review process path and command line arguments.';
+  return 'Safe process';
+}
+
 module.exports = {
   id: 'process-viewer', name: 'Process Viewer',
   description: 'List running processes with CPU/memory and suspicious process scoring.',
   category: 'System', icon: 'list',
   run: async () => {
-    const { default: psList } = await import('ps-list');
-    const processes = await psList();
-    return processes.slice(0, 400).map((p) => {
-      const item = { pid: p.pid, ppid: p.ppid || null, name: p.name, cmd: p.cmd || null, path: null, cpu: p.cpu !== undefined ? +p.cpu.toFixed(1) : null, memory: p.memory !== undefined ? +p.memory.toFixed(1) : null };
-      item.risk = makeRisk(processSignals(item));
-      item.recommendedAction = recommendationForRisk(item.risk, 'process');
-      return item;
-    }).sort((a, b) => b.risk.score - a.risk.score || (b.cpu || 0) - (a.cpu || 0));
+    try {
+      const procData = await si.processes();
+      const processList = procData.list || [];
+      
+      return processList.slice(0, 400).map((p) => {
+        const item = {
+          pid: p.pid,
+          ppid: p.parentPid || null,
+          name: p.name || 'unknown',
+          cmd: p.command || null,
+          path: p.path || null,
+          cpu: p.cpu !== undefined ? +(p.cpu).toFixed(1) : null,
+          memory: p.mem !== undefined ? +(p.mem).toFixed(1) : null
+        };
+        item.risk = makeRisk(processSignals(item));
+        item.recommendedAction = recommendationForRisk(item.risk);
+        return item;
+      }).sort((a, b) => b.risk.score - a.risk.score || (b.memory || 0) - (a.memory || 0));
+    } catch (err) {
+      console.error('Failed to get processes:', err);
+      return [];
+    }
   }
 };

@@ -42,15 +42,16 @@ module.exports = {
     if (!ctx || !ctx.toolRegistry) throw new Error('toolRegistry is required in ctx');
     const overviewResult = await ctx.toolRegistry.run('security-overview', {}, ctx);
     const systemResult = await ctx.toolRegistry.run('system-monitor', {}, ctx);
-    const snapshot = ctx.appStore ? ctx.appStore.getSnapshot() : { history: {}, quarantine: [] };
+    const scanReports = ctx.db && typeof ctx.db.getScanReports === 'function' ? ctx.db.getScanReports(5) : [];
+    const quarantine = ctx.db && typeof ctx.db.getQuarantineList === 'function' ? ctx.db.getQuarantineList() : [];
 
     const report = {
       generatedAt: new Date().toISOString(),
       app: { name: 'Soterios System Tools', version: args.version || '1.0.1' },
       overview: overviewResult.data,
       system: systemResult.data,
-      recentScans: (snapshot.history.scans || []).slice(0, 5),
-      quarantine: snapshot.quarantine || [],
+      recentScans: scanReports,
+      quarantine,
       recommendations: overviewResult.data ? overviewResult.data.recommendations || [] : []
     };
 

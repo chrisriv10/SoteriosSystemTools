@@ -1,33 +1,61 @@
 window.Pages = window.Pages || {};
-window.Pages.quarantine = {
+window.Pages['quarantine'] = {
   async render(container) {
     container.innerHTML = `
-      <div class="page-header"><h1 class="page-title">Quarantine</h1>
-        <div class="page-subtitle">Review isolated files, restore trusted items, or permanently delete</div></div>
-      <div class="panel"><div class="flex-between" style="margin-bottom:14px;">
-          <div class="panel-title" style="margin-bottom:0;">Quarantined Items</div>
-          <button class="btn btn-sm" id="refreshQ">Refresh</button></div>
-        <div id="quarantineList"><div class="empty-state">Loading...</div></div></div>`;
-    container.querySelector('#refreshQ').addEventListener('click', () => this.load(container));
-    this.load(container);
-  },
-  async load(container) {
-    const listEl = container.querySelector('#quarantineList');
+      <header class="page-header">
+        <h1 class="page-title">Quarantine</h1>
+        <p class="page-subtitle">Isolated files that were detected as threats.</p>
+      </header>
+      <div class="card">
+        <div id="quarantineList" style="display:flex; flex-direction:column; gap:16px;">
+          Loading...
+        </div>
+      </div>
+    `;
+
     try {
-      const items = await Api.getQuarantine();
-      if (!items.length) { listEl.innerHTML = '<div class="empty-state">No files have been quarantined.</div>'; return; }
-      listEl.innerHTML = items.map((item) => {
-        const active = item.status === 'quarantined';
-        return `<div class="history-item quarantine-item"><div class="quarantine-main"><div class="history-title">${escapeHtml(item.fileName || item.originalPath)}</div><div class="history-meta">${escapeHtml(item.reason || 'No reason recorded')}</div><div class="history-meta mono">${escapeHtml(item.originalPath || '')}</div><div class="history-meta">Status: <span class="${active ? 'warn' : ''}">${escapeHtml(item.status)}</span> — ${escapeHtml(new Date(item.createdAt).toLocaleString())}</div></div><div class="quarantine-actions"><button class="btn btn-sm" data-restore-id="${escapeHtml(item.id)}" data-original-path="${escapeHtml(item.originalPath)}" data-quarantine-path="${escapeHtml(item.quarantinePath)}" ${active ? '' : 'disabled'}>Restore</button><button class="btn btn-sm btn-danger" data-delete-id="${escapeHtml(item.id)}" data-quarantine-path="${escapeHtml(item.quarantinePath)}" ${active ? '' : 'disabled'}>Delete</button></div></div>`;
-      }).join('');
-      listEl.querySelectorAll('[data-restore-id]').forEach((btn) => btn.addEventListener('click', async () => {
-        setButtonLoading(btn, true, 'Restoring...');
-        try { await Api.runTool('restore-quarantine-file', { id: btn.dataset.restoreId, originalPath: btn.dataset.originalPath, quarantinePath: btn.dataset.quarantinePath }); this.load(container); } catch (err) { btn.textContent = 'Failed'; }
-      }));
-      listEl.querySelectorAll('[data-delete-id]').forEach((btn) => btn.addEventListener('click', async () => {
-        setButtonLoading(btn, true, 'Deleting...');
-        try { await Api.runTool('delete-quarantine-file', { id: btn.dataset.deleteId, quarantinePath: btn.dataset.quarantinePath }); this.load(container); } catch (err) { btn.textContent = 'Failed'; }
-      }));
-    } catch (err) { showToolError(listEl, err); }
+      const qList = await window.api.invoke('db:getQuarantineList');
+      const listContainer = document.getElementById('quarantineList');
+      if (!qList || qList.length === 0) {
+        listContainer.innerHTML = '<div class="empty-state">No items in quarantine.</div>';
+        return;
+      }
+
+      listContainer.innerHTML = '';
+      qList.forEach(item => {
+        const itemEl = document.createElement('div');
+        itemEl.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid var(--glass-border);";
+        itemEl.innerHTML = `
+          <div>
+            <div style="font-weight: 500;">${item.threat_name}</div>
+            <div class="page-subtitle" style="font-size: 0.8rem; margin-top: 4px;">${item.original_path}</div>
+            <div class="page-subtitle" style="font-size: 0.75rem;">${item.date_quarantined} | ${item.engine}</div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn" onclick="restoreQuarantine(${item.id})">Restore</button>
+            <button class="btn" style="color: var(--accent-danger);" onclick="deleteQuarantine(${item.id})">Delete</button>
+          </div>
+        `;
+        listContainer.appendChild(itemEl);
+      });
+    } catch (e) {
+      document.getElementById('quarantineList').innerHTML = `<div class="empty-state">Failed to load quarantine: ${e.message}</div>`;
+    }
   }
+};
+
+window.restoreQuarantine = async (id) => {
+  try {
+    const res = await window.api.invoke('quarantine:restore', id);
+    if (res.success) window.AppRouter.navigate('quarantine');
+    else alert('Failed to restore: ' + res.error);
+  } catch (e) { alert(e); }
+};
+
+window.deleteQuarantine = async (id) => {
+  try {
+    const res = await window.api.invoke('quarantine:delete', id);
+    if (res.success) window.AppRouter.navigate('quarantine');
+    else alert('Failed to delete: ' + res.error);
+  } catch (e) { alert(e); }
 };

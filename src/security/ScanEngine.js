@@ -1,0 +1,227 @@
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+}
+
+function scanReportsDir() {
+  const dir = path.join(os.homedir(), '.soterios', 'scan-reports');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function renderScanReportHtml(report) {
+  const threatRows = report.threats.length
+    ? report.threats.map((t) => `<tr><td>${esc(t.name)}</td><td>${esc(t.path)}</td></tr>`).join('')
+    : '<tr><td colspan="2">No threats found.</td></tr>';
+  const errors = report.errors.length
+    ? report.errors.map((e) => `<li>${esc(e)}</li>`).join('')
+    : '<li>No scan errors recorded.</li>';
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><title>Soterios Scan Report</title>
+<style>body{font-family:Segoe UI,Arial,sans-serif;margin:32px;color:#15202b;background:#fff}.muted{color:#667085}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}.card{border:1px solid #d7dde5;border-radius:6px;padding:14px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;border-bottom:1px solid #e6eaf0;padding:8px;font-size:13px}.danger{color:#b42318}.ok{color:#027a48}.warn{color:#b54708}pre{white-space:pre-wrap;word-break:break-word}</style>
+</head><body>
+<h1>Soterios Scan Report</h1>
+<div class="muted">Generated ${esc(new Date(report.completedAt).toLocaleString())}</div>
+<div class="grid">
+  <div class="card"><div class="muted">Type</div><h2>${esc(report.scanType)}</h2></div>
+  <div class="card"><div class="muted">Status</div><h2 class="${report.status === 'completed' ? 'ok' : 'warn'}">${esc(report.status)}</h2></div>
+  <div class="card"><div class="muted">Files Scanned</div><h2>${esc(report.filesScanned)}</h2></div>
+  <div class="card"><div class="muted">Threats</div><h2 class="${report.threatsFound ? 'danger' : 'ok'}">${esc(report.threatsFound)}</h2></div>
+</div>
+<h2>Targets</h2><pre>${esc(report.targetPaths.join('\n'))}</pre>
+<h2>Threat Details</h2>
+<table><thead><tr><th>Name</th><th>Path</th></tr></thead><tbody>${threatRows}</tbody></table>
+<h2>Errors and Notes</h2><ul>${errors}</ul>
+</body></html>`;
+}
+
+class ScanEngine {
+  constructor(db, eventBus, clamEngine, heuristicEngine, reputationEngine, quarantineManager) {
+    this.db = db;
+    this.eventBus = eventBus;
+    this.clamEngine = clamEngine;
+    this.heuristicEngine = heuristicEngine;
+    this.reputationEngine = reputationEngine;
+    this.quarantineManager = quarantineManager;
+    this.abortController = null;
+    this.isScanning = false;
+    this.currentScan = null;
+  }
+
+  async runQuickScan() {
+    if (this.isScanning) return { error: 'Scan already in progress' };
+
+    const windir = process.env.WINDIR || 'C:\\Windows';
+    const localAppData = process.env.LOCALAPPDATA || process.env.USERPROFILE + '\\AppData\\Local';
+    const appData = process.env.APPDATA || process.env.USERPROFILE + '\\AppData\\Roaming';
+
+    const targets = [
+      windir + '\\Temp',
+      localAppData + '\\Temp',
+      windir + '\\Prefetch',
+      appData + '\\Microsoft\\Windows\\Start Menu\\Programs\\Startup'
+    ].filter(t => {
+      try { return require('fs').existsSync(t); } catch (_) { return false; }
+    });
+
+    if (targets.length === 0) {
+      return { success: true, filesScanned: 0, threatsFound: 0, note: 'No scan targets found.' };
+    }
+
+    return this.runScan('quick', targets, 'Quick scan starting...');
+  }
+
+  async runFullScan() {
+    if (this.isScanning) return { error: 'Scan already in progress' };
+
+    return this.runScan('full', ['C:\\'], 'Full scan starting (this may take a while)...');
+  }
+
+  async runCustomScan(paths) {
+    if (this.isScanning) return { error: 'Scan already in progress' };
+    return this.runScan('custom', paths, 'Custom scan starting...');
+  }
+
+  async runScan(scanType, paths, startMessage) {
+    this.isScanning = true;
+    this.abortController = new AbortController();
+    this.currentScan = { scanType, paths, startedAt: new Date().toISOString() };
+
+    const startTime = Date.now();
+    let totalFilesScanned = 0;
+    let totalThreatsFound = 0;
+    const threats = [];
+    const errors = [];
+    let wasCanceled = false;
+
+    try {
+      this.eventBus.emit('scan:progress', { pct: 5, message: startMessage });
+
+      for (let i = 0; i < paths.length; i++) {
+        if (this.abortController.signal.aborted) {
+          wasCanceled = true;
+          break;
+        }
+
+        const targetPath = paths[i];
+        const basePct = Math.round((i / paths.length) * 80 + 10);
+        this.eventBus.emit('scan:progress', { pct: basePct, message: 'Scanning ' + targetPath + '...' });
+
+        const result = await this.clamEngine.scanFile(targetPath, (progress) => {
+          if (!progress) return;
+
+          if (progress.phase === 'update') {
+            this.eventBus.emit('scan:progress', { pct: Math.max(8, basePct - 2), message: 'Updating ClamAV definitions...' });
+            return;
+          }
+
+          const checked = progress.fileCount || 0;
+          const pct = Math.min(95, basePct + Math.min(70, Math.round(checked / 10)));
+          this.eventBus.emit('scan:progress', { pct, message: 'Scanning ' + targetPath + ' (' + checked + ' files checked)...' });
+        });
+
+        if (this.abortController.signal.aborted) {
+          wasCanceled = true;
+        }
+
+        if (result.success) {
+          totalThreatsFound += result.threatsFound || 0;
+          totalFilesScanned += result.filesScanned || 0;
+          if (Array.isArray(result.threats)) threats.push(...result.threats);
+          if (result.note && !this._note) this._note = result.note;
+        } else {
+          if (wasCanceled) errors.push('Scan canceled by user.');
+          else errors.push(result.error || 'Scan failed for ' + targetPath);
+        }
+      }
+    } catch (err) {
+      console.error('Scan error:', err);
+      errors.push(err.message || String(err));
+    } finally {
+      this.isScanning = false;
+      const durationMs = Date.now() - startTime;
+      const status = wasCanceled ? 'canceled' : (errors.length === 0 ? 'completed' : 'failed');
+      const report = this.saveScanReport({
+        scanType,
+        status,
+        startedAt: this.currentScan ? this.currentScan.startedAt : new Date(startTime).toISOString(),
+        completedAt: new Date().toISOString(),
+        targetPaths: paths,
+        filesScanned: totalFilesScanned,
+        threatsFound: totalThreatsFound,
+        durationMs,
+        threats,
+        errors
+      });
+      try {
+        if (this.db.getSetting('feature.scanHistory', true)) {
+          this.db.logScan(scanType, totalFilesScanned, totalThreatsFound, durationMs);
+        }
+      } catch (_) {}
+      this.currentScan = null;
+      this.eventBus.emit('scan:complete', { filesScanned: totalFilesScanned, threatsFound: totalThreatsFound, durationMs, threats, errors, status, report });
+    }
+
+    const note = this._note;
+    this._note = undefined;
+    return {
+      success: errors.length === 0 && !wasCanceled,
+      canceled: wasCanceled,
+      status: wasCanceled ? 'canceled' : (errors.length === 0 ? 'completed' : 'failed'),
+      filesScanned: totalFilesScanned,
+      threatsFound: totalThreatsFound,
+      threats,
+      errors,
+      error: errors[0],
+      note
+    };
+  }
+
+  abortScan() {
+    if (this.abortController) this.abortController.abort();
+    if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
+      this.clamEngine.abortCurrentScan();
+    }
+    this.eventBus.emit('scan:progress', { pct: 100, message: 'Canceling scan...' });
+    return { success: true };
+  }
+
+  getStatus() {
+    return {
+      isScanning: this.isScanning,
+      currentScan: this.currentScan
+    };
+  }
+
+  saveScanReport(report) {
+    const dir = scanReportsDir();
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const base = `scan-${report.scanType}-${stamp}`;
+    const jsonPath = path.join(dir, `${base}.json`);
+    const htmlPath = path.join(dir, `${base}.html`);
+    fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2), 'utf8');
+    fs.writeFileSync(htmlPath, renderScanReportHtml(report), 'utf8');
+    const saved = { ...report, jsonPath, htmlPath };
+    try {
+      this.db.addScanReport({
+        scanType: report.scanType,
+        status: report.status,
+        targetPaths: report.targetPaths,
+        filesScanned: report.filesScanned,
+        threatsFound: report.threatsFound,
+        durationMs: report.durationMs,
+        jsonPath,
+        htmlPath,
+        details: report
+      });
+    } catch (err) {
+      console.warn('Unable to save scan report record:', err.message || err);
+    }
+    return saved;
+  }
+}
+
+module.exports = ScanEngine;

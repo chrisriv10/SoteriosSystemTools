@@ -36,3 +36,11 @@ function setButtonLoading(button, loading, loadingLabel = 'Working…') {
 function showToolError(container, err) {
   container.innerHTML = `<div class="panel" style="border-color: var(--danger); color: var(--danger); font-size:12.5px;">${escapeHtml(err.message || String(err))}</div>`;
 }
+function truncatePath(p, maxLen) {
+  if (!p || p.length <= maxLen) return p || '';
+  const parts = p.split('\\');
+  if (parts.length <= 3) return '...' + p.slice(-(maxLen - 3));
+  const head = parts[0] + '\\...\\';
+  const tail = parts.slice(-2).join('\\');
+  return head + tail;
+}

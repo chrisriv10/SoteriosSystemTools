@@ -1,11 +1,26 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeImage, Notification } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
 
+const DatabaseService = require('../core/database');
+const eventBus = require('../core/eventBus');
+const { registerIpcHandlers } = require('./ipcHandlers');
+
+const ClamAVEngine = require('../security/ClamAVEngine');
+const HeuristicEngine = require('../security/HeuristicEngine');
+const ReputationEngine = require('../security/ReputationEngine');
+const QuarantineManager = require('../security/QuarantineManager');
+const ScanEngine = require('../security/ScanEngine');
+const RealTimeWatcher = require('../security/RealTimeWatcher');
+const ProcessInspector = require('../security/ProcessInspector');
+const SystemAudit = require('../security/SystemAudit');
+const FirewallManager = require('../security/FirewallManager');
+const NetworkMonitor = require('../security/NetworkMonitor');
+
+// Legacy utilities
 const { loadPlugins } = require('../core/pluginLoader');
 const toolRegistry = require('../core/toolRegistry');
-const appStore = require('../core/appStore');
 
 let mainWindow;
 
@@ -14,9 +29,19 @@ function logLine(level, message, meta) {
     const line = JSON.stringify({ ts: new Date().toISOString(), level, message, meta: meta || null }) + '\n';
     fs.mkdirSync(app.getPath('userData'), { recursive: true });
     fs.appendFileSync(path.join(app.getPath('userData'), 'soterios.log'), line);
-  } catch (_) {
-    // Logging should never block app startup or tool execution.
-  }
+  } catch (_) { }
+}
+
+function createShieldIcon() {
+  const iconPath = path.join(__dirname, '..', '..', 'assets', 'icon.png');
+  return nativeImage.createFromPath(iconPath).resize({ width: 64, height: 64 });
+}
+
+function showNotification(title, body) {
+  if (!Notification.isSupported()) return;
+  try {
+    new Notification({ title, body, icon: createShieldIcon() }).show();
+  } catch (_) {}
 }
 
 function createWindow() {
@@ -26,7 +51,8 @@ function createWindow() {
     minWidth: 980,
     minHeight: 640,
     backgroundColor: '#0e1117',
-    title: 'Soterios',
+    title: 'Soterios Security',
+    icon: createShieldIcon(),
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
@@ -49,41 +75,18 @@ function createWindow() {
 
 function buildAppMenu() {
   const isMac = process.platform === 'darwin';
-  const quarantineDir = path.join(os.homedir(), '.soterios-quarantine');
-
+  
   const aboutHandler = () => {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
-      title: 'About Soterios',
-      message: 'Soterios',
-      detail:
-        `Version ${app.getVersion()}\n\n` +
-        'A local-first Windows security and system health assistant.\n\n' +
-        'This app does not collect, transmit, or upload any data. All ' +
-        'scanning and analysis happens entirely on this device.\n\n' +
-        'The file scanner is a local heuristic/signature tool, not a ' +
-        'replacement for dedicated antivirus software.',
+      title: 'About Soterios Security',
+      message: 'Soterios Security Platform',
+      detail: `Version ${app.getVersion()}\n\nProfessional Endpoint Protection.`,
       buttons: ['OK']
     });
   };
 
   const template = [
-    ...(isMac
-      ? [{
-        label: app.name,
-        submenu: [
-          { label: 'About Soterios', click: aboutHandler },
-          { type: 'separator' },
-          { role: 'services' },
-          { type: 'separator' },
-          { role: 'hide' },
-          { role: 'hideOthers' },
-          { role: 'unhide' },
-          { type: 'separator' },
-          { role: 'quit' }
-        ]
-      }]
-      : []),
     {
       label: 'File',
       submenu: [isMac ? { role: 'close' } : { role: 'quit' }]
@@ -104,11 +107,7 @@ function buildAppMenu() {
     {
       label: 'Help',
       submenu: [
-        ...(isMac ? [] : [{ label: 'About Soterios', click: aboutHandler }]),
-        {
-          label: 'Quarantine Folder',
-          click: () => shell.openPath(quarantineDir)
-        }
+        { label: 'About Soterios', click: aboutHandler }
       ]
     }
   ];
@@ -117,9 +116,112 @@ function buildAppMenu() {
 }
 
 app.whenReady().then(async () => {
-  appStore.init(app.getPath('userData'));
-  const loadedTools = loadPlugins();
-  logLine('info', 'Plugins loaded', { count: loadedTools.length });
+  logLine('info', 'App starting');
+
+  // 1. Database
+  const dbPath = path.join(app.getPath('userData'), 'soterios.db');
+  const db = new DatabaseService(dbPath);
+
+  // 2. Security Engines (Dependency Injection)
+  const clamEngine = new ClamAVEngine({
+    dbDir: path.join(app.getPath('userData'), 'clamav-db')
+  });
+  const heuristicEngine = new HeuristicEngine();
+  const reputationEngine = new ReputationEngine(db);
+  const quarantineManager = new QuarantineManager(db);
+  
+  const scanEngine = new ScanEngine(
+    db, 
+    eventBus, 
+    clamEngine, 
+    heuristicEngine, 
+    reputationEngine, 
+    quarantineManager
+  );
+  
+  const realtimeWatcher = new RealTimeWatcher(db, eventBus, scanEngine);
+  const processInspector = new ProcessInspector();
+  const systemAudit = new SystemAudit();
+  const firewallManager = new FirewallManager();
+  const networkMonitor = new NetworkMonitor();
+
+  // Initialize Engines
+  await clamEngine.init();
+  if (db.getSetting('feature.realtimeProtection', true)) {
+    realtimeWatcher.start();
+  }
+  loadPlugins();
+
+  const services = {
+    db,
+    eventBus,
+    clamEngine,
+    heuristicEngine,
+    reputationEngine,
+    quarantineManager,
+    scanEngine,
+    realtimeWatcher,
+    processInspector,
+    systemAudit,
+    firewallManager,
+    networkMonitor,
+    toolRegistry
+  };
+
+  // 3. Register IPC
+  registerIpcHandlers(mainWindow, services);
+
+  // Forward scan progress events from EventBus to renderer
+  const announcedProgress = new Set();
+  eventBus.on('scan:progress', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('scan:progress', data);
+    }
+    if (!data || typeof data.pct !== 'number') return;
+    const milestone = [0, 25, 50, 75].find((value) => data.pct >= value && !announcedProgress.has(value));
+    if (milestone !== undefined) {
+      announcedProgress.add(milestone);
+      showNotification('Soterios scan progress', data.message || `Scan is ${milestone}% complete.`);
+    }
+  });
+
+  // Forward scan complete events to renderer
+  eventBus.on('scan:complete', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('scan:complete', data);
+    }
+    announcedProgress.clear();
+    const label = data.status === 'completed' ? 'Scan completed' : data.status === 'canceled' ? 'Scan canceled' : 'Scan finished with issues';
+    showNotification(label, `${data.filesScanned || 0} file(s) scanned, ${data.threatsFound || 0} threat(s) found.`);
+    // Auto-generate a scan report
+    (async () => {
+      try {
+        if (!db.getSetting('feature.autoReports', true)) return;
+        logLine('info', 'Generating scan report...');
+        const result = await toolRegistry.run('generate-security-report', { version: app.getVersion() }, { toolRegistry, db, log: logLine });
+        logLine('info', 'Scan report ' + (result.ok ? 'generated' : 'failed: ' + (result.error || 'unknown')));
+      } catch (err) {
+        logLine('error', 'Auto-report generation threw: ' + (err.message || err));
+      }
+    })();
+  });
+
+  // 4. Expose legacy utilities
+  // Expose legacy utility running mechanism
+  ipcMain.handle('tools:list', () => toolRegistry.list());
+  ipcMain.handle('tools:run', async (event, toolId, args) => {
+    // Note: appStore is removed, so we mock it for utilities if needed
+    // or just let them use basic features.
+    return toolRegistry.run(toolId, args, {
+      toolRegistry,
+      db,
+      log: logLine,
+      sendProgress: (payload) => {
+        event.sender.send(`tools:progress:${toolId}`, payload);
+      }
+    });
+  });
+
   buildAppMenu();
   createWindow();
 
@@ -138,61 +240,4 @@ process.on('unhandledRejection', (err) => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
-});
-
-/* ---------------------------------------------------------------------- */
-/* IPC: generic tool registry bridge                                       */
-/* ---------------------------------------------------------------------- */
-
-ipcMain.handle('tools:list', () => toolRegistry.list());
-
-ipcMain.handle('tools:run', async (event, toolId, args) => {
-  return toolRegistry.run(toolId, args, {
-    appStore,
-    toolRegistry,
-    log: logLine,
-    sendProgress: (payload) => {
-      event.sender.send(`tools:progress:${toolId}`, payload);
-    }
-  });
-});
-
-/* ---------------------------------------------------------------------- */
-/* IPC: local app data                                                     */
-/* ---------------------------------------------------------------------- */
-
-ipcMain.handle('store:snapshot', () => appStore.getSnapshot());
-ipcMain.handle('store:settings', () => appStore.getSettings());
-ipcMain.handle('store:updateSettings', (_event, patch) => appStore.updateSettings(patch || {}));
-ipcMain.handle('store:history', (_event, kind, limit) => appStore.listHistory(kind, limit));
-ipcMain.handle('store:quarantine', () => appStore.listQuarantine());
-ipcMain.handle('app:info', () => ({
-  name: app.getName(),
-  version: app.getVersion(),
-  userData: app.getPath('userData'),
-  logPath: path.join(app.getPath('userData'), 'soterios.log')
-}));
-
-/* ---------------------------------------------------------------------- */
-/* IPC: native dialogs                                                     */
-/* ---------------------------------------------------------------------- */
-
-ipcMain.handle('dialog:pickFolder', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openDirectory']
-  });
-  if (result.canceled || result.filePaths.length === 0) return null;
-  return result.filePaths[0];
-});
-
-ipcMain.handle('dialog:pickFiles', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openFile', 'multiSelections']
-  });
-  if (result.canceled) return [];
-  return result.filePaths;
-});
-
-ipcMain.handle('shell:showItemInFolder', (_event, filePath) => {
-  shell.showItemInFolder(filePath);
 });

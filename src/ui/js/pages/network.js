@@ -15,10 +15,12 @@ window.Pages['network'] = {
   async load(container) {
     const content = container.querySelector('#networkContent');
     try {
-      const [stats, connections] = await Promise.all([
+      const [statsResult, connectionsResult] = await Promise.allSettled([
         window.api.invoke('network:stats'),
         window.api.invoke('network:connections')
       ]);
+      const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
+      const connections = connectionsResult.status === 'fulfilled' ? connectionsResult.value : null;
 
       let html = '';
 

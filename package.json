@@ -1,6 +1,6 @@
 {
-  "name": "soterios-system-tools",
-  "version": "1.0.1",
+  "name": "soterios",
+  "version": "1.0.2",
   "description": "A local-first desktop toolkit for system maintenance, monitoring, and basic security checks.",
   "main": "main.js",
   "author": "Soterios",
@@ -30,9 +30,9 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.soterios.systemtools",
-    "productName": "Soterios System Tools",
-    "copyright": "Copyright © 2026 Soterios",
+    "appId": "com.soterios.app",
+    "productName": "Soterios",
+    "copyright": "Copyright (c) 2026 Chris Rivera",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -59,7 +59,7 @@
       ],
       "icon": "assets/icon.ico",
       "artifactName": "${productName}-Setup-${version}.${ext}",
-      "publisherName": "Soterios",
+      "publisherName": "Chris Rivera",
       "signAndEditExecutable": false,
       "requestedExecutionLevel": "requireAdministrator"
     },
@@ -70,7 +70,7 @@
       "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Soterios System Tools",
+      "shortcutName": "Soterios",
       "menuCategory": true,
       "license": "build/LICENSE.txt",
       "installerIcon": "assets/icon.ico",

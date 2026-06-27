@@ -67,12 +67,28 @@ window.Pages['audit'] = {
       }
       content.innerHTML = html;
       content.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
-        await window.api.invoke('warnings:ignore', { id: btn.dataset.id, title: btn.dataset.title, detail: btn.dataset.detail });
-        this.load(container);
+        const card = btn.closest('.card');
+        btn.disabled = true;
+        try {
+          await window.api.invoke('warnings:ignore', { id: btn.dataset.id, title: btn.dataset.title, detail: btn.dataset.detail });
+          if (card) card.remove();
+          await this.load(container);
+        } catch (err) {
+          btn.disabled = false;
+          alert(err.message || 'Unable to ignore warning.');
+        }
       }));
       content.querySelectorAll('.audit-restore').forEach((btn) => btn.addEventListener('click', async () => {
-        await window.api.invoke('warnings:unignore', btn.dataset.id);
-        this.load(container);
+        const item = btn.closest('.history-item');
+        btn.disabled = true;
+        try {
+          await window.api.invoke('warnings:unignore', btn.dataset.id);
+          if (item) item.remove();
+          await this.load(container);
+        } catch (err) {
+          btn.disabled = false;
+          alert(err.message || 'Unable to restore warning.');
+        }
       }));
     } catch (e) {
       content.innerHTML = `<div class="empty-state">Error running audit: ${escapeHtml(e.message)}</div>`;

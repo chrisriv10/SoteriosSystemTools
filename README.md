@@ -1,99 +1,79 @@
-# Soterios System Tools
+# Soterios
 
-A local-first Windows desktop app for system maintenance, monitoring, and security checks. Built with Electron 31.
+Soterios is a local-first Windows desktop security and maintenance app built with Electron. It combines ClamAV-backed scanning, Windows security visibility, process inspection, real-time protection, reports, quarantine, password tools, and safe maintenance utilities in one desktop UI.
+
+Version: 1.0.2
 
 ## Features
 
-- **Security Dashboard** — Overall score from Defender status, firewall profiles, Windows Update, scan history, and system health
-- **Action Center** — Prioritized recommendations with direct navigation to the relevant page
-- **ClamAV File Scanner** — Quick, full, and custom folder scans with real-time progress bar, threat detection, and quarantine
-- **Process Inspector** — Running processes with live CPU/RAM and heuristic risk scoring
-- **Windows Security Audit** — Checks Defender, UAC, firewall, BitLocker, Secure Boot, Windows Update, PowerShell policy
-- **Firewall Management** — Profile status and rule summary (inbound/outbound, allow/block counts)
-- **Network Monitor** — Active TCP connections grouped by state with per-interface bandwidth
-- **Maintenance Scripts** — On-demand temp cleanup, disk space report, large files, browser cache, startup items, network report, Windows services report
-- **Password Generator** — Cryptographically random password generation and offline strength checker
-- **Quarantine Management** — Restore or permanently delete isolated files
-- **Security Reports** — Auto-generated HTML/JSON reports after each scan, accessible from the Reports page
-- **Real-Time Protection** — File system watcher with instant alerting
-- **Tools** — Extensible plugin system (12 built-in tools)
+- Security Dashboard with health score, scan status, warnings, ignored warnings, quarantine count, and real-time protection controls
+- Virus Scan with quick, full, and custom scans, ClamAV definition updates, progress, cancellation, quarantine, and saved scan reports
+- In-app Reports page for browsing, viewing, generating, and deleting scan/security reports
+- Process Inspector with risk-first sorting, then highest CPU/RAM impact inside the same risk level
+- Windows Security Audit for Defender, UAC, Windows Update, BitLocker, PowerShell policy, and Secure Boot
+- Firewall Management for Windows Firewall profile status and rule summaries
+- Network Monitor for active connections and interface activity
+- Password tools with generator, local strength checks, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks
+- Real-Time Protection through a local file system watcher
+- Quarantine Management for restoring or permanently deleting isolated files
+- Tools & Maintenance scripts for temp cleanup, disk reports, large files, browser cache reports, startup items, network reports, and Windows services reports
 
-**No telemetry. No network calls. All data stays on your machine.**
+Soterios does not collect telemetry or analytics. Local scanning and system analysis happen on your machine. Network calls occur only when you trigger features that need them, such as ClamAV definition updates, HIBP password checks, or XposedOrNot email breach checks.
 
-## Quick start
+## Requirements
+
+- Windows 10 or Windows 11
+- Node.js 22 or newer for development/builds
+- Administrator rights are requested by the packaged Windows app for system-level checks
+- Internet access is optional, but needed for ClamAV definition updates and breach lookups
+
+## Setup
 
 ```bash
 npm install
 npm start
 ```
 
-## Build from source
-
-### Prerequisites
-- Node.js 22+
-- Windows (electron-builder NSIS target)
-
-### Commands
-
-| Command | Description |
-|---------|-------------|
-| `npm start` | Run locally in development mode |
-| `npm run pack` | Build unpacked Windows app (fast, no installer) |
-| `npm run dist:win` | Build production Windows installer (.exe) |
-
-The installer is written to `dist/Soterios System Tools-Setup-1.0.1.exe`.
-
-### GitHub Actions
-
-Push a tag starting with `v` to trigger an automated build and GitHub Release:
+## Build
 
 ```bash
-git tag v1.0.1
-git push origin v1.0.1
+npm run pack
+npm run dist:win
 ```
 
-## Project structure
+The Windows installer is written to:
 
-```
-main.js              Electron main process, window creation, service wiring
-src/
-  preload/           contextBridge API exposed to the renderer
-  main/              IPC handlers (ipcHandlers.js), service orchestration
-  core/              Tool registry, plugin loader, database
-  tools/             12 plugins: process viewer, security overview, system monitor, report generator, etc.
-  security/          Windows check helpers (Defender, firewall, updates, signatures), audit, network monitor
-  av/                ClamAV integration (spawner, engine), scan logic
-  scripts/           Maintenance script registry + 7 safe script implementations
-  ui/
-    pages/           shell.html — the app's single HTML entry point
-    css/             style.css — dark glassmorphism theme
-    js/              api.js, components.js, router.js, state.js
-    js/pages/        One JS module per page (dashboard, scanner, quarantine, processes, audit, firewall, network, etc.)
-assets/              App icons, ClamAV binaries
+```text
+dist/Soterios-Setup-1.0.2.exe
 ```
 
-## Adding signatures
+## Usage
 
-Edit `src/av/signatureDB.json` and add entries:
+1. Open Soterios.
+2. Review the Dashboard for current health, warnings, and real-time protection status.
+3. Run a quick, full, or custom scan from Virus Scan.
+4. View scan details from Reports without leaving the app.
+5. Use Windows Audit for non-firewall Windows security posture checks.
+6. Use Firewall Management for firewall profile and rule visibility.
+7. Use Process Inspector to review high-risk or high-impact processes.
+8. Use Passwords for local generation/strength checks and optional breach lookups.
 
-```json
-{ "name": "My Signature", "hash": "<sha256-lowercase-hex>" }
+## API Notes
+
+- Password leak checks use Have I Been Pwned Pwned Passwords k-anonymity. Only the first 5 SHA-1 hash characters are sent.
+- Email breach checks use the free XposedOrNot email API.
+
+## Project Structure
+
+```text
+main.js              Electron root entry point
+src/preload/         contextBridge API exposed to the renderer
+src/main/            IPC handlers and app/service orchestration
+src/core/            database, event bus, tool registry, plugin loader
+src/security/        scanning, quarantine, audit, firewall, network, process, and realtime services
+src/tools/           built-in tool modules
+src/scripts/         maintenance scripts and registry
+src/ui/              shell, CSS, shared JS, and page modules
+assets/              Soterios icons and bundled ClamAV files
+build/               installer resources
 ```
-
-The EICAR test hash is included by default so you can verify the scanner works end-to-end.
-
-## Architecture notes
-
-- **Sandbox**: `contextIsolation: true`, `sandbox: true`, preload script for bridge API
-- **IPC communication**: Renderer invokes `window.api.invoke()`/`window.api.on()` → main process handlers → services
-- **No `appStore`**: The legacy Vuex-style central store was removed; settings use `db:getSetting`/`db:setSetting` IPC, components manage their own state
-- **systeminformation** for process data (`si.processes()`) and system stats
-- **ClamAV** bundled at `assets/clamav/` — spawns `clamscan.exe` for actual scanning; virus definitions need `freshclam` or a bundled `main.cvd`
-- **Safe scripts** in `src/safeScripts/` are standalone Node.js scripts registered in `registry.json`
-- **CSS**: Dark theme with glassmorphism cards, CSS custom properties, utility grid classes
-
-## Security notes
-
-- Defender/firewall/update checks use PowerShell with three fallback strategies, so they work even without elevation
-- The file scanner is a local heuristic tool, not a replacement for Microsoft Defender
-- Quarantined files are moved (not copied) to `~/.soterios-quarantine`

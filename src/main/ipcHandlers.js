@@ -138,7 +138,9 @@ function registerIpcHandlers(mainWindow, services) {
     const dir = path.join(os.homedir(), '.soterios', 'reports');
     try {
       const fs = require('fs');
-      const files = fs.readdirSync(dir).filter(f => f.endsWith('.html') || f.endsWith('.json'));
+      const all = fs.readdirSync(dir).filter(f => f.endsWith('.html') || f.endsWith('.json'));
+      const jsonBases = new Set(all.filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/i, '')));
+      const files = all.filter(f => f.endsWith('.json') || !jsonBases.has(f.replace(/\.html$/i, '')));
       return files.sort().reverse().slice(0, 50).map(f => ({
         name: f, path: path.join(dir, f),
         mtime: fs.statSync(path.join(dir, f)).mtime.toISOString()
@@ -167,7 +169,31 @@ function registerIpcHandlers(mainWindow, services) {
     const resolved = path.resolve(filePath || '');
     if (!resolved.startsWith(path.resolve(reportsDir))) return { success: false, error: 'Invalid report path.' };
     deleteFileIfSafe(resolved);
+    const sidecar = resolved.toLowerCase().endsWith('.json')
+      ? resolved.replace(/\.json$/i, '.html')
+      : resolved.replace(/\.html$/i, '.json');
+    if (sidecar !== resolved) deleteFileIfSafe(sidecar);
     return { success: true };
+  });
+
+  ipcMain.handle('reports:read', async (_event, filePath) => {
+    const reportsDir = path.join(os.homedir(), '.soterios', 'reports');
+    const resolved = path.resolve(filePath || '');
+    if (!resolved.startsWith(path.resolve(reportsDir))) return { success: false, error: 'Invalid report path.' };
+    if (!fs.existsSync(resolved)) return { success: false, error: 'Report not found.' };
+    if (resolved.toLowerCase().endsWith('.json')) {
+      return { success: true, type: 'json', data: JSON.parse(fs.readFileSync(resolved, 'utf8')) };
+    }
+    if (resolved.toLowerCase().endsWith('.html')) {
+      const html = fs.readFileSync(resolved, 'utf8');
+      const text = html.replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return { success: true, type: 'html', text };
+    }
+    return { success: false, error: 'Unsupported report type.' };
   });
 
   ipcMain.handle('hibp:password', async (_event, password) => {
@@ -184,18 +210,17 @@ function registerIpcHandlers(mainWindow, services) {
     return { found: count > 0, count };
   });
 
-  ipcMain.handle('hibp:email', async (_event, email, apiKey) => {
+  ipcMain.handle('xon:email', async (_event, email) => {
     if (!email) return { found: false, breaches: [] };
-    if (!apiKey) return { requiresApiKey: true, found: false, breaches: [] };
     const encoded = encodeURIComponent(email);
-    const res = await requestText(`https://haveibeenpwned.com/api/v3/breachedaccount/${encoded}?truncateResponse=true`, {
-      headers: { 'hibp-api-key': apiKey }
-    });
+    const res = await requestText(`https://api.xposedornot.com/v1/check-email/${encoded}?details=true`);
     if (res.statusCode === 404) return { found: false, breaches: [] };
-    if (res.statusCode === 401 || res.statusCode === 403) throw new Error('HIBP email check requires a valid API key.');
-    if (res.statusCode === 429) throw new Error('HIBP rate limit reached. Try again in a moment.');
-    if (res.statusCode !== 200) throw new Error(`HIBP email check failed (${res.statusCode}).`);
-    const breaches = JSON.parse(res.body || '[]');
+    if (res.statusCode === 429) throw new Error('XposedOrNot rate limit reached. Try again in a moment.');
+    if (res.statusCode !== 200) throw new Error(`XposedOrNot email check failed (${res.statusCode}).`);
+    const body = JSON.parse(res.body || '{}');
+    if (body.Error || body.error) return { found: false, breaches: [] };
+    const raw = body.breaches || body.Breaches || body.breach_details || body.BreachMetrics?.breaches_details || [];
+    const breaches = Array.isArray(raw) ? raw.flat(Infinity).filter(Boolean) : Object.values(raw || {});
     return { found: breaches.length > 0, breaches };
   });
 

@@ -50,28 +50,7 @@ class SystemAudit {
       results.push({ name: 'User Account Control', status: 'error', message: 'Could not check UAC status.' });
     }
 
-    // 3. Windows Firewall
-    const fw = await this.runPowerShell(`Get-NetFirewallProfile | Select-Object Name, Enabled | ConvertTo-Json`);
-    if (fw.ok) {
-      try {
-        const profiles = JSON.parse(fw.stdout);
-        const list = Array.isArray(profiles) ? profiles : [profiles];
-        list.forEach((p) => {
-          results.push({
-            name: `Firewall: ${p.Name} Profile`, status: p.Enabled ? 'pass' : 'fail',
-            message: p.Enabled ? `${p.Name} firewall is ON.` : `${p.Name} firewall is OFF!`,
-            detail: p.Enabled ? 'Inbound connections that do not match a rule are blocked.' : 'Inbound connections are not filtered.',
-            recommendation: p.Enabled ? '' : `Enable the ${p.Name} firewall profile in Windows Defender Firewall.`
-          });
-        });
-      } catch (e) {
-        results.push({ name: 'Windows Firewall', status: 'error', message: 'Could not parse firewall profiles.' });
-      }
-    } else {
-      results.push({ name: 'Windows Firewall', status: 'error', message: 'Could not query firewall status.' });
-    }
-
-    // 4. Windows Update status
+    // 3. Windows Update status
     const up = await this.runPowerShell(`$session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $pending = $searcher.Search("IsInstalled=0 and IsHidden=0"); $pending.Updates.Count`);
     if (up.ok) {
       const count = parseInt(up.stdout.trim(), 10);
@@ -84,7 +63,7 @@ class SystemAudit {
       results.push({ name: 'Windows Updates', status: 'warn', message: 'Could not query update status.', detail: 'Windows Update may be disabled or the COM query timed out.', recommendation: 'Check Windows Update in Settings manually.' });
     }
 
-    // 5. BitLocker
+    // 4. BitLocker
     const bl = await this.runPowerShell(`Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop | Select-Object ProtectionStatus | ConvertTo-Json`);
     if (bl.ok) {
       try {
@@ -102,7 +81,7 @@ class SystemAudit {
       results.push({ name: 'BitLocker', status: 'info', message: 'BitLocker is not available on this system.', detail: 'Requires Windows Pro/Enterprise and a TPM chip.' });
     }
 
-    // 6. PowerShell Execution Policy
+    // 5. PowerShell Execution Policy
     const ep = await this.runPowerShell(`(Get-ExecutionPolicy -Scope LocalMachine).ToString()`);
     if (ep.ok) {
       const policy = ep.stdout.trim();
@@ -115,7 +94,7 @@ class SystemAudit {
       });
     }
 
-    // 7. Secure Boot status
+    // 6. Secure Boot status
     const sb = await this.runPowerShell(`Confirm-SecureBootUEFI`);
     if (sb.ok) {
       const enabled = sb.stdout.trim() === 'True';

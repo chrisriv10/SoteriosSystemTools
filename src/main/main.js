@@ -1,6 +1,5 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeImage, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, Notification } = require('electron');
 const path = require('path');
-const os = require('os');
 const fs = require('fs');
 
 const DatabaseService = require('../core/database');
@@ -51,7 +50,7 @@ function createWindow() {
     minWidth: 980,
     minHeight: 640,
     backgroundColor: '#0e1117',
-    title: 'Soterios Security',
+    title: 'Soterios',
     icon: createShieldIcon(),
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
@@ -79,9 +78,9 @@ function buildAppMenu() {
   const aboutHandler = () => {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
-      title: 'About Soterios Security',
-      message: 'Soterios Security Platform',
-      detail: `Version ${app.getVersion()}\n\nProfessional Endpoint Protection.`,
+      title: 'About Soterios',
+      message: 'Soterios',
+      detail: `Version ${app.getVersion()}\n\nLocal-first Windows security and maintenance platform.`,
       buttons: ['OK']
     });
   };

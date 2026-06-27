@@ -3,7 +3,9 @@
   const fill = document.getElementById('scanIndicatorFill');
   const pct = document.getElementById('scanIndicatorPct');
   const msg = document.getElementById('scanIndicatorMsg');
+  if (!el || !fill || !pct || !msg) return;
   const label = el.querySelector('.scan-indicator-label');
+  const dot = el.querySelector('.scan-indicator-dot');
 
   let doneTimer = null;
 
@@ -34,7 +36,7 @@
       label.textContent = 'Scan failed';
       el.style.borderColor = 'rgba(239,68,68,0.35)';
       el.style.background = 'rgba(239,68,68,0.07)';
-      el.querySelector('.scan-indicator-dot').style.background = '#ef4444';
+      if (dot) dot.style.background = '#ef4444';
     } else {
       label.textContent = 'Scan complete';
       msg.textContent = '';
@@ -44,7 +46,7 @@
       el.classList.remove('scan-indicator--done');
       el.style.borderColor = '';
       el.style.background = '';
-      el.querySelector('.scan-indicator-dot').style.background = '';
+      if (dot) dot.style.background = '';
       label.textContent = 'Scanning\u2026';
       setProgress(0, '');
     }, 3000);
@@ -55,14 +57,14 @@
     el.classList.remove('scan-indicator--done');
     el.style.borderColor = '';
     el.style.background = '';
-    el.querySelector('.scan-indicator-dot').style.background = '';
+    if (dot) dot.style.background = '';
     label.textContent = 'Scanning\u2026';
     show();
     setProgress(data.pct, data.message);
   });
 
   window.api.on('scan:complete', (data) => {
-    markDone(data.status);
+    markDone(data && data.status);
   });
 
   el.addEventListener('click', () => {

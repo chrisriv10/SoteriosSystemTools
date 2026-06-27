@@ -36,10 +36,9 @@ window.Pages.passwords = {
         <div class="panel"><div class="panel-title">Email Breach Check</div>
           <div class="field"><label class="field-label">Email address</label>
             <input type="text" id="leakEmailInput" placeholder="name@example.com" /></div>
-          <div class="field"><label class="field-label">HIBP API key</label>
-            <input type="password" id="hibpApiKey" placeholder="Required for email breach checks" /></div>
           <button class="btn btn-primary" id="checkEmailLeak">Check Email</button>
           <div id="emailLeakResult" style="margin-top:12px;"></div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Uses the XposedOrNot email breach API.</div>
         </div>
       </div>`;
     this.wireGenerator(container);
@@ -94,8 +93,6 @@ window.Pages.passwords = {
   },
 
   async wireLeakChecks(container) {
-    const savedKey = await window.api.invoke('db:getSetting', 'hibp.apiKey', '');
-    container.querySelector('#hibpApiKey').value = savedKey || '';
     container.querySelector('#checkPasswordLeak').addEventListener('click', async () => {
       const btn = container.querySelector('#checkPasswordLeak');
       const out = container.querySelector('#passwordLeakResult');
@@ -114,19 +111,15 @@ window.Pages.passwords = {
       const btn = container.querySelector('#checkEmailLeak');
       const out = container.querySelector('#emailLeakResult');
       const email = container.querySelector('#leakEmailInput').value.trim();
-      const apiKey = container.querySelector('#hibpApiKey').value.trim();
       if (!email) { out.innerHTML = '<div class="empty-state">Enter an email first.</div>'; return; }
-      if (apiKey) await window.api.invoke('db:setSetting', 'hibp.apiKey', apiKey);
       setButtonLoading(btn, true, 'Checking...');
       try {
-        const result = await window.api.invoke('hibp:email', email, apiKey);
-        if (result.requiresApiKey) {
-          out.innerHTML = '<div class="log-row"><span class="log-tag warn">api key</span><span class="log-path">HIBP requires an API key for email breach checks.</span></div>';
-        } else if (!result.found) {
+        const result = await window.api.invoke('xon:email', email);
+        if (!result.found) {
           out.innerHTML = '<div class="log-row"><span class="log-tag clean">clear</span><span class="log-path">No breaches returned for this email.</span></div>';
         } else {
           out.innerHTML = `<div class="log-row"><span class="log-tag match">breached</span><span class="log-path">${result.breaches.length} breach(es) returned.</span></div>` +
-            result.breaches.map(b => `<div class="log-row"><span class="log-tag warn">breach</span><span class="log-path">${escapeHtml(b.Name || b.name || JSON.stringify(b))}</span></div>`).join('');
+            result.breaches.map(b => `<div class="log-row"><span class="log-tag warn">breach</span><span class="log-path">${escapeHtml(typeof b === 'string' ? b : (b.Name || b.name || b.breach || b.breach_name || JSON.stringify(b)))}</span></div>`).join('');
         }
       } catch (err) { showToolError(out, err); }
       finally { setButtonLoading(btn, false); }

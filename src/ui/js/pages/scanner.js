@@ -66,87 +66,101 @@ window.Pages['scanner'] = {
     const cancelButton = document.getElementById('btnCancelScan');
     const reportButton = document.getElementById('btnOpenScanReports');
     let isScanRunning = false;
+    let alive = true;
+    this.cleanups.push(() => { alive = false; });
+
+    function hasView() {
+      return alive && document.body.contains(container);
+    }
 
     function setProgress(pct) {
+      if (!hasView() || !progressFill) return;
       progressFill.style.width = Math.min(100, Math.max(0, pct)) + '%';
     }
 
     function setScanning(active) {
+      if (!hasView()) return;
       isScanRunning = active;
       if (active) {
-        scanCard.style.display = 'block';
-        scanStatus.textContent = 'Scanning\u2026';
-        scanDetail.textContent = 'Please wait while files are checked.';
-        scanIcon.className = 'status-icon info';
-        scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+        if (scanCard) scanCard.style.display = 'block';
+        if (scanStatus) scanStatus.textContent = 'Scanning\u2026';
+        if (scanDetail) scanDetail.textContent = 'Please wait while files are checked.';
+        if (scanIcon) {
+          scanIcon.className = 'status-icon info';
+          scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+        }
         setProgress(30);
         document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom').forEach(b => b.disabled = true);
-        cancelButton.disabled = false;
+        if (cancelButton) cancelButton.disabled = false;
       } else {
         document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom').forEach(b => b.disabled = false);
-        cancelButton.disabled = true;
+        if (cancelButton) cancelButton.disabled = true;
       }
     }
 
     function setComplete(success, filesScanned, threatsFound, note, canceled) {
+      if (!hasView()) return;
       setProgress(100);
       setScanning(false);
       if (canceled) {
-        scanStatus.textContent = 'Scan Canceled';
-        scanDetail.textContent = `${filesScanned} file(s) scanned before cancellation. A scan report was saved.`;
-        scanIcon.className = 'status-icon warning';
-        scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+        if (scanStatus) scanStatus.textContent = 'Scan Canceled';
+        if (scanDetail) scanDetail.textContent = `${filesScanned} file(s) scanned before cancellation. A scan report was saved.`;
+        if (scanIcon) { scanIcon.className = 'status-icon warning';
+        scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'; }
         return;
       }
       if (success) {
-        scanStatus.textContent = 'Scan Complete';
-        scanDetail.textContent = `${filesScanned} file(s) scanned, ${threatsFound} threat(s) found.` + (note ? ' ' + note : '');
-        scanIcon.className = 'status-icon ' + (threatsFound > 0 ? 'danger' : 'safe');
+        if (scanStatus) scanStatus.textContent = 'Scan Complete';
+        if (scanDetail) scanDetail.textContent = `${filesScanned} file(s) scanned, ${threatsFound} threat(s) found.` + (note ? ' ' + note : '');
+        if (scanIcon) { scanIcon.className = 'status-icon ' + (threatsFound > 0 ? 'danger' : 'safe');
         scanIcon.innerHTML = threatsFound > 0
           ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
-          : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+          : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'; }
       } else {
-        scanStatus.textContent = 'Scan Failed';
-        scanDetail.textContent = note || 'An error occurred during the scan.';
-        scanIcon.className = 'status-icon danger';
-        scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+        if (scanStatus) scanStatus.textContent = 'Scan Failed';
+        if (scanDetail) scanDetail.textContent = note || 'An error occurred during the scan.';
+        if (scanIcon) { scanIcon.className = 'status-icon danger';
+        scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'; }
       }
     }
 
     async function refreshStatus() {
       try {
         const status = await window.api.invoke('scan:status');
+        if (!hasView()) return;
         if (status.scan && status.scan.isScanning) setScanning(true);
         const engine = status.engine || status;
         if (!engine.ready) {
-          clamStatusText.textContent = 'ClamAV is not ready. The bundled scanner could not be found.';
+          if (clamStatusText) clamStatusText.textContent = 'ClamAV is not ready. The bundled scanner could not be found.';
         } else if (!engine.hasDefinitions) {
-          clamStatusText.textContent = 'Definitions are missing. They will be downloaded automatically before scanning.';
+          if (clamStatusText) clamStatusText.textContent = 'Definitions are missing. They will be downloaded automatically before scanning.';
         } else {
-          clamStatusText.textContent = 'Ready with local ClamAV definitions.';
+          if (clamStatusText) clamStatusText.textContent = 'Ready with local ClamAV definitions.';
         }
       } catch (e) {
-        clamStatusText.textContent = e.message || 'Unable to read ClamAV status.';
+        if (hasView() && clamStatusText) clamStatusText.textContent = e.message || 'Unable to read ClamAV status.';
       }
     }
 
     function setError(msg) {
-      scanCard.style.display = 'block';
-      scanStatus.textContent = 'Error';
-      scanDetail.textContent = msg;
-      scanIcon.className = 'status-icon danger';
-      scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+      if (!hasView()) return;
+      if (scanCard) scanCard.style.display = 'block';
+      if (scanStatus) scanStatus.textContent = 'Error';
+      if (scanDetail) scanDetail.textContent = msg;
+      if (scanIcon) { scanIcon.className = 'status-icon danger';
+      scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'; }
       document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom').forEach(b => b.disabled = false);
-      cancelButton.disabled = true;
+      if (cancelButton) cancelButton.disabled = true;
       isScanRunning = false;
     }
 
     // Subscribe to scan progress events from main process
     this.cleanups.push(window.api.on('scan:progress', (data) => {
+      if (!hasView()) return;
       if (data && data.pct !== undefined) {
-        scanCard.style.display = 'block';
+        if (scanCard) scanCard.style.display = 'block';
         setProgress(data.pct);
-        scanDetail.textContent = data.message || 'Scanning\u2026';
+        if (scanDetail) scanDetail.textContent = data.message || 'Scanning\u2026';
       }
     }));
 
@@ -168,6 +182,7 @@ window.Pages['scanner'] = {
       updateDefinitionsButton.disabled = true;
       try {
         const res = await window.api.invoke('scan:updateDefinitions');
+        if (!hasView()) return;
         if (!res.success) throw new Error(res.error || 'Definition update failed.');
         scanStatus.textContent = 'Definitions Updated';
         scanDetail.textContent = 'ClamAV signatures are ready.';
@@ -176,7 +191,7 @@ window.Pages['scanner'] = {
       } catch (e) {
         setError(e.message);
       } finally {
-        updateDefinitionsButton.disabled = false;
+        if (hasView() && updateDefinitionsButton) updateDefinitionsButton.disabled = false;
       }
     });
 
@@ -187,6 +202,8 @@ window.Pages['scanner'] = {
       scanDetail.textContent = 'Stopping the active scanner process...';
       try {
         await window.api.invoke('scan:abort');
+        if (!hasView()) return;
+        setComplete(false, 0, 0, '', true);
       } catch (e) {
         setError(e.message);
       }
@@ -203,6 +220,7 @@ window.Pages['scanner'] = {
       if (beforeStart) beforeStart();
       try {
         const res = await runner();
+        if (!hasView()) return;
         setComplete(!!res.success, res.filesScanned || 0, res.threatsFound || 0, res.note || res.error, !!res.canceled);
         await refreshStatus();
       } catch (e) {

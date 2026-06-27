@@ -1,8 +1,8 @@
-SOTERIOS SYSTEM TOOLS — LICENSE AGREEMENT
+SOTERIOS - LICENSE AGREEMENT
 
 MIT License
 
-Copyright (c) 2026 Soterios
+Copyright (c) 2026 Chris Rivera
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -26,17 +26,15 @@ DEALINGS IN THE SOFTWARE.
 
 ABOUT THIS APPLICATION
 
-Soterios System Tools is a local-first utility for system maintenance,
-monitoring, and basic security checks (file scanning against a local
-signature database, password tools, disk/CPU/process monitoring, and
-opt-in maintenance scripts).
+Soterios is a local-first Windows security and maintenance platform with
+ClamAV-backed file scanning, process inspection, Windows audit checks,
+firewall visibility, password tools, reports, quarantine, real-time
+protection, and opt-in maintenance scripts.
 
-It does not collect, transmit, or upload any data. All scanning and
-analysis happens entirely on your own machine. No telemetry, no analytics,
-no network calls of any kind.
+Soterios does not collect telemetry or analytics. Local scanning and system
+analysis happen on your own machine. Network calls are limited to actions
+you request, such as ClamAV definition updates, HIBP k-anonymity password
+checks, or XposedOrNot email breach checks.
 
 The file scanner is a local heuristic/signature tool, not a substitute for
-a dedicated antivirus product. It will only detect threats matching
-signatures you've explicitly added to its local database, plus a small set
-of heuristic checks (suspicious file extensions, temp-directory locations,
-abnormally high file entropy).
+a dedicated antivirus product.

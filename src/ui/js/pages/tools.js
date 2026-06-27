@@ -13,7 +13,7 @@ window.Pages.tools = {
     container.innerHTML = `
       <div class="page-header">
         <h1 class="page-title">Tools & Maintenance</h1>
-        <div class="page-subtitle">Run focused maintenance checks and see completion output.</div>
+        <div class="page-subtitle">Run focused maintenance checks.</div>
       </div>
       <div id="scriptList" class="dashboard-grid compact"></div>
       <div class="card" style="padding:0; overflow:hidden; margin-top:24px;">
@@ -21,7 +21,7 @@ window.Pages.tools = {
           <span>Output</span>
           <button class="btn btn-sm" id="clearOutputBtn" style="display:none;">Clear</button>
         </div>
-        <div class="log-surface" id="toolOutput" style="padding:16px; min-height:240px; max-height:460px; overflow-y:auto;"><div class="empty-state">Run a tool to see output here.</div></div>
+        <div class="log-surface" id="toolOutput" style="padding:16px; min-height:240px; max-height:460px; overflow-y:auto;"><div class="empty-state"></div></div>
       </div>`;
     this.load(container);
   },

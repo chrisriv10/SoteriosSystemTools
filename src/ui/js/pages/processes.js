@@ -17,14 +17,12 @@ window.Pages.processes = {
       const rows = processes.slice(0, 150).map((p) => {
         const rawPath = p.path || p.cmd || '';
         const shortPath = truncatePath(rawPath || 'Path unavailable', 56);
-        const command = p.cmd && p.cmd !== p.path ? truncatePath(p.cmd, 72) : '';
         return `
         <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:16px; border-left: 4px solid ${p.risk.score >= 35 ? 'var(--accent-danger)' : 'var(--accent-success)'};">
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
             <div style="min-width:0;">
               <div style="font-weight:600; font-size:1.1rem;">${escapeHtml(p.name)} <span class="page-subtitle" style="font-size:0.85rem;">(PID ${escapeHtml(p.pid)})</span></div>
               <div class="path-chip" title="${escapeHtml(rawPath)}">${escapeHtml(shortPath)}</div>
-              ${command ? `<div class="history-meta mono" style="margin-top:4px;" title="${escapeHtml(p.cmd)}">Args: ${escapeHtml(command)}</div>` : ''}
             </div>
             <div style="text-align:right;">
               <div style="font-weight:600; font-size:1.1rem; color:${p.risk.score >= 35 ? 'var(--accent-danger)' : 'var(--accent-success)'}">${escapeHtml(p.risk.score)} Risk</div>

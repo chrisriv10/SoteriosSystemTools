@@ -12,7 +12,7 @@ window.Pages['dashboard'] = {
         <div class="card">
           <div class="status-card">
             <div class="status-icon info" id="healthIcon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 12 16 8"/></svg>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
             </div>
             <div class="status-info">
               <h3>System Health Score</h3>
@@ -138,8 +138,16 @@ window.Pages['dashboard'] = {
           </div>`).join('') : '<div class="empty-state">No active warnings.</div>';
         warningList.querySelectorAll('[data-open-warning]').forEach((btn) => btn.addEventListener('click', () => window.AppRouter.navigate(btn.dataset.openWarning)));
         warningList.querySelectorAll('[data-ignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
-          await window.api.invoke('warnings:ignore', { id: btn.dataset.ignoreWarning, title: btn.dataset.title, detail: btn.dataset.detail });
-          await loadWarnings();
+          const item = btn.closest('.history-item');
+          btn.disabled = true;
+          try {
+            await window.api.invoke('warnings:ignore', { id: btn.dataset.ignoreWarning, title: btn.dataset.title, detail: btn.dataset.detail });
+            if (item) item.remove();
+            await loadWarnings();
+          } catch (err) {
+            btn.disabled = false;
+            alert(err.message || 'Unable to ignore warning.');
+          }
         }));
 
         const ignored = await window.api.invoke('warnings:listIgnored');
@@ -152,8 +160,16 @@ window.Pages['dashboard'] = {
             <button class="btn btn-sm" data-unignore-warning="${escapeHtml(w.id)}">Restore</button>
           </div>`).join('') : '<div class="empty-state">No ignored warnings.</div>';
         ignoredList.querySelectorAll('[data-unignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
-          await window.api.invoke('warnings:unignore', btn.dataset.unignoreWarning);
-          await loadWarnings();
+          const item = btn.closest('.history-item');
+          btn.disabled = true;
+          try {
+            await window.api.invoke('warnings:unignore', btn.dataset.unignoreWarning);
+            if (item) item.remove();
+            await loadWarnings();
+          } catch (err) {
+            btn.disabled = false;
+            alert(err.message || 'Unable to restore warning.');
+          }
         }));
       } catch (err) {
         warningList.innerHTML = `<div class="empty-state">Error: ${escapeHtml(err.message)}</div>`;
@@ -188,14 +204,19 @@ window.Pages['dashboard'] = {
     await loadWarnings();
 
     btnToggleRtp.addEventListener('click', async () => {
-      setButtonLoading(btnToggleRtp, true, 'Updating...');
+      const previous = isRtpActive;
+      const next = !isRtpActive;
+      btnToggleRtp.disabled = true;
+      btnToggleRtp.textContent = next ? 'Enabling...' : 'Disabling...';
       try {
-        const next = !isRtpActive;
         const status = await window.api.invoke('rtp:toggle', next);
         await window.api.invoke('db:setSetting', 'feature.realtimeProtection', !!status);
         setRtpState(status);
+      } catch (err) {
+        setRtpState(previous);
+        alert(err.message || 'Unable to update real-time protection.');
       } finally {
-        setButtonLoading(btnToggleRtp, false);
+        btnToggleRtp.disabled = false;
       }
     });
 
@@ -236,6 +257,8 @@ window.Pages['dashboard'] = {
       if (quarantineList) {
         document.getElementById('threatsCount').textContent = quarantineList.length;
       }
-    } catch(e) {}
+    } catch(e) {
+      console.warn('Failed to load dashboard data:', e);
+    }
   }
 };

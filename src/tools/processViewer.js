@@ -46,7 +46,13 @@ module.exports = {
         item.risk = makeRisk(processSignals(item));
         item.recommendedAction = recommendationForRisk(item.risk);
         return item;
-      }).sort((a, b) => b.risk.score - a.risk.score || (b.memory || 0) - (a.memory || 0));
+      }).sort((a, b) => {
+        const riskDelta = b.risk.score - a.risk.score;
+        if (riskDelta !== 0) return riskDelta;
+        const usageA = (a.cpu || 0) + (a.memory || 0);
+        const usageB = (b.cpu || 0) + (b.memory || 0);
+        return usageB - usageA;
+      });
     } catch (err) {
       console.error('Failed to get processes:', err);
       return [];

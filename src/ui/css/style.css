@@ -353,6 +353,18 @@ body {
 .flex-between { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 .panel { background: var(--bg-surface); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; }
 .panel-title { font-weight: 600; margin-bottom: 12px; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.reports-layout { display: grid; grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr); gap: 18px; align-items: start; }
+.report-browser, .report-viewer { min-height: 520px; }
+.report-content { display: flex; flex-direction: column; gap: 16px; }
+.report-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.report-section { border-top: 1px solid var(--glass-border); padding-top: 14px; }
+.report-section pre { white-space: pre-wrap; word-break: break-word; color: var(--text-muted); font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 0.82rem; }
+.stat-value.small { font-size: 0.82rem; line-height: 1.3; }
+.compact-empty { min-height: 56px; padding: 12px; }
+@media (max-width: 1180px) {
+  .reports-layout { grid-template-columns: 1fr; }
+  .report-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* Settings page */
 .toggle-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--glass-border); }

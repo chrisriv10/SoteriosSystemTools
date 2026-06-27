@@ -2,6 +2,7 @@ window.Pages = window.Pages || {};
 window.Pages.settings = {
   async render(container) {
     const settings = await Api.getSettings();
+    const appInfo = await Api.getAppInfo();
     container.innerHTML = `
       <div class="page-header"><h1 class="page-title">Settings</h1>
         <div class="page-subtitle">Local app preferences and feature toggles</div></div>
@@ -59,9 +60,8 @@ window.Pages.settings = {
         <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">About</div>
           <div style="font-size:0.9rem; line-height:1.8;">
-            <div><strong>Soterios System Tools</strong> v1.0.1</div>
-            <div style="color:var(--text-muted); margin-top:8px;">Local-first desktop toolkit for system maintenance, monitoring, and security checks.</div>
-            <div style="color:var(--text-muted); margin-top:8px;">No telemetry. No cloud calls. All data stays on your machine.</div>
+            <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.0.2')}</div>
+            <div style="color:var(--text-muted); margin-top:8px;">Local-first Windows security and maintenance platform.</div>
             <div style="margin-top:12px; font-size:0.8rem;">
               <div>ClamAV engine at <code style="color:var(--accent-primary);">assets/clamav/</code></div>
               <div>Quarantine path: <code style="color:var(--accent-primary);">~/.soterios-quarantine</code></div>

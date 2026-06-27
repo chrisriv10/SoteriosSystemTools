@@ -1,67 +1,109 @@
-# Soterios
+<p align="center">
+  <img src="assets/icon.png" alt="Soterios" width="128" />
+</p>
 
-Soterios is a local-first Windows desktop security and maintenance app built with Electron. It combines ClamAV-backed scanning, Windows security visibility, process inspection, real-time protection, reports, quarantine, password tools, and safe maintenance utilities in one desktop UI.
+<h1 align="center">Soterios</h1>
 
-Version: 1.0.2
+<p align="center">
+  <strong>Open-source, local-first desktop security &amp; maintenance toolkit.</strong><br/>
+  Scan files, inspect processes, audit your system, manage your firewall, check passwords — all without telemetry.
+</p>
+
+<p align="center">
+  <a href="https://github.com/chrisriv10/Soterios/releases/latest"><img src="https://img.shields.io/github/v/release/chrisriv10/Soterios?style=flat-square&label=Latest%20Release" alt="Latest Release" /></a>
+  <a href="https://github.com/chrisriv10/Soterios/blob/main/build/LICENSE.txt"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT License" /></a>
+  <a href="https://github.com/chrisriv10/Soterios/releases/latest"><img src="https://img.shields.io/github/downloads/chrisriv10/Soterios/total?style=flat-square&label=Downloads" alt="Downloads" /></a>
+</p>
+
+---
+
+## Download & Install
+
+Pick the installer for your operating system from the [latest release](https://github.com/chrisriv10/Soterios/releases/latest):
+
+| Platform | Installer | Notes |
+|----------|-----------|-------|
+| **Windows** | `Soterios-Setup-x.x.x.exe` | NSIS installer · requires admin for system-level checks |
+| **macOS** | `Soterios-x.x.x.dmg` | Drag to Applications · may require Gatekeeper approval |
+| **Linux** | `Soterios-x.x.x.AppImage` | `chmod +x` and run · no install needed |
+
+---
 
 ## Features
 
-- Security Dashboard with health score, scan status, warnings, ignored warnings, quarantine count, and real-time protection controls
-- Virus Scan with quick, full, and custom scans, ClamAV definition updates, progress, cancellation, quarantine, and saved scan reports
-- In-app Reports page for browsing, viewing, generating, and deleting scan/security reports
-- Process Inspector with risk-first sorting, then highest CPU/RAM impact inside the same risk level
-- Windows Security Audit for Defender, UAC, Windows Update, BitLocker, PowerShell policy, and Secure Boot
-- Firewall Management for Windows Firewall profile status and rule summaries
-- Network Monitor for active connections and interface activity
-- Password tools with generator, local strength checks, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks
-- Real-Time Protection through a local file system watcher
-- Quarantine Management for restoring or permanently deleting isolated files
-- Tools & Maintenance scripts for temp cleanup, disk reports, large files, browser cache reports, startup items, network reports, and Windows services reports
+- **Security Dashboard** — health score, scan status, warnings, ignored warnings, quarantine count, and real-time protection controls
+- **Virus Scan** — quick, full, and custom scans powered by ClamAV with definition updates, progress, cancellation, quarantine, and saved reports
+- **Reports** — browse, view, generate, and delete scan and security reports in-app
+- **Process Inspector** — risk-first sorting, then highest CPU/RAM impact within the same risk level
+- **Windows Security Audit** — Defender, UAC, Windows Update, BitLocker, PowerShell policy, and Secure Boot
+- **Firewall Management** — Windows Firewall profile status and rule summaries
+- **Network Monitor** — active connections and interface activity
+- **Password Tools** — local generator, strength checker, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks
+- **Real-Time Protection** — local file-system watcher for live threat detection
+- **Quarantine Management** — restore or permanently delete isolated files
+- **Tools & Maintenance** — temp cleanup, disk reports, large file finder, browser cache reports, startup items, network reports, and Windows services reports
 
-Soterios does not collect telemetry or analytics. Local scanning and system analysis happen on your machine. Network calls occur only when you trigger features that need them, such as ClamAV definition updates, HIBP password checks, or XposedOrNot email breach checks.
+---
 
-## Requirements
+## Privacy
 
-- Windows 10 or Windows 11
-- Node.js 22 or newer for development/builds
-- Administrator rights are requested by the packaged Windows app for system-level checks
-- Internet access is optional, but needed for ClamAV definition updates and breach lookups
+Soterios does **not** collect telemetry or analytics. All scanning and system analysis happens locally on your machine. Network calls occur **only** when you explicitly trigger features that require them (ClamAV updates, HIBP checks, XposedOrNot lookups).
 
-## Setup
+---
+
+## Development Setup
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 22 or newer
+- [Git](https://git-scm.com/)
+
+### Clone & Run
 
 ```bash
+git clone https://github.com/chrisriv10/Soterios.git
+cd Soterios
 npm install
 npm start
 ```
 
-## Build
+### Build Installers
 
 ```bash
-npm run pack
+# Windows (NSIS .exe)
 npm run dist:win
+
+# macOS (.dmg)
+npm run dist:mac
+
+# Linux (.AppImage)
+npm run dist:linux
 ```
 
-The Windows installer is written to:
+Built artifacts are output to the `dist/` directory.
 
-```text
-dist/Soterios-Setup-1.0.2.exe
-```
+---
 
 ## Usage
 
-1. Open Soterios.
-2. Review the Dashboard for current health, warnings, and real-time protection status.
-3. Run a quick, full, or custom scan from Virus Scan.
-4. View scan details from Reports without leaving the app.
-5. Use Windows Audit for non-firewall Windows security posture checks.
-6. Use Firewall Management for firewall profile and rule visibility.
-7. Use Process Inspector to review high-risk or high-impact processes.
-8. Use Passwords for local generation/strength checks and optional breach lookups.
+1. **Dashboard** — review your health score, active warnings, and real-time protection status.
+2. **Virus Scan** — run a quick, full, or custom scan.
+3. **Reports** — view detailed scan results without leaving the app.
+4. **Windows Audit** — check Defender, UAC, BitLocker, and other Windows security settings.
+5. **Firewall** — inspect firewall profile status and rules.
+6. **Process Inspector** — review high-risk or resource-heavy processes.
+7. **Passwords** — generate secure passwords, check strength locally, and optionally look up breaches.
+
+---
 
 ## API Notes
 
-- Password leak checks use Have I Been Pwned Pwned Passwords k-anonymity. Only the first 5 SHA-1 hash characters are sent.
-- Email breach checks use the free XposedOrNot email API.
+| Feature | Service | Privacy |
+|---------|---------|---------|
+| Password leak checks | [Have I Been Pwned – Pwned Passwords](https://haveibeenpwned.com/Passwords) | Only the first 5 characters of the SHA-1 hash are sent (k-anonymity) |
+| Email breach checks | [XposedOrNot](https://xposedornot.com/) | Free public email breach API |
+
+---
 
 ## Project Structure
 
@@ -76,4 +118,26 @@ src/scripts/         maintenance scripts and registry
 src/ui/              shell, CSS, shared JS, and page modules
 assets/              Soterios icons and bundled ClamAV files
 build/               installer resources
+tests/               test suites
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome! To get started:
+
+1. **Fork** the repository.
+2. **Create a branch** for your feature or fix: `git checkout -b feature/my-feature`.
+3. **Commit** your changes with clear messages.
+4. **Push** to your fork and open a **Pull Request**.
+
+Please make sure your changes work locally (`npm start`) before submitting.
+
+---
+
+## License
+
+Soterios is released under the [MIT License](build/LICENSE.txt).
+
+**Copyright © 2026 Chris Rivera**

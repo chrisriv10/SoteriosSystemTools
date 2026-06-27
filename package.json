@@ -2,7 +2,7 @@
   "name": "soterios",
   "version": "1.0.2",
   "description": "A local-first desktop toolkit for system maintenance, monitoring, and basic security checks.",
-  "main": "main.js",
+  "main": "src/main/main.js",
   "author": "Soterios",
   "license": "MIT",
   "private": true,
@@ -33,6 +33,7 @@
     "appId": "com.soterios.app",
     "productName": "Soterios",
     "copyright": "Copyright (c) 2026 Chris Rivera",
+    "icon": "assets/icon.ico",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -41,7 +42,7 @@
       "assets/clamav/**"
     ],
     "files": [
-      "main.js",
+      "src/main/main.js",
       "preload.js",
       "src/**/*",
       "assets/**/*",
@@ -60,7 +61,7 @@
       "icon": "assets/icon.ico",
       "artifactName": "${productName}-Setup-${version}.${ext}",
       "publisherName": "Chris Rivera",
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
       "requestedExecutionLevel": "requireAdministrator"
     },
     "nsis": {

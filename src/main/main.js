@@ -31,15 +31,15 @@ function logLine(level, message, meta) {
   } catch (_) { }
 }
 
-function createShieldIcon() {
-  const iconPath = path.join(__dirname, '..', '..', 'assets', 'icon.ico');
+function createIcon() {
+  const iconPath = path.join(__dirname, '../../assets/icon.ico');
   return nativeImage.createFromPath(iconPath);
 }
 
 function showNotification(title, body) {
   if (!Notification.isSupported()) return;
   try {
-    new Notification({ title, body, icon: createShieldIcon() }).show();
+    new Notification({ title, body, icon: createIcon() }).show();
   } catch (_) {}
 }
 
@@ -51,7 +51,7 @@ function createWindow() {
     minHeight: 640,
     backgroundColor: '#0e1117',
     title: 'Soterios',
-    icon: createShieldIcon(),
+    icon: createIcon(),   
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
@@ -74,7 +74,7 @@ function createWindow() {
 
 function buildAppMenu() {
   const isMac = process.platform === 'darwin';
-  
+
   const aboutHandler = () => {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
@@ -130,16 +130,16 @@ app.whenReady().then(async () => {
   const heuristicEngine = new HeuristicEngine();
   const reputationEngine = new ReputationEngine(db);
   const quarantineManager = new QuarantineManager(db);
-  
+
   const scanEngine = new ScanEngine(
-    db, 
-    eventBus, 
-    clamEngine, 
-    heuristicEngine, 
-    reputationEngine, 
+    db,
+    eventBus,
+    clamEngine,
+    heuristicEngine,
+    reputationEngine,
     quarantineManager
   );
-  
+
   const realtimeWatcher = new RealTimeWatcher(db, eventBus, scanEngine);
   const processInspector = new ProcessInspector();
   const systemAudit = new SystemAudit();

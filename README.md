@@ -5,7 +5,7 @@
 <h1 align="center">Soterios</h1>
 
 <p align="center">
-  <strong>Open-source, local-first Windows security and system maintenance suite.</strong><br/>
+  <strong>Open-source, local-first security and system maintenance suite.</strong><br/>
   Scan files, inspect processes, audit your system, manage your firewall, test password strength, and check known breaches privately.
 </p>
 
@@ -136,7 +136,7 @@ Please make sure your changes work locally (`npm start`) before submitting.
 
 ---
 
-## ⚠️ Project Status & Contributions
+## Project Status & Contributions
 
 Soterios is currently in early development.
 
@@ -144,7 +144,7 @@ Some features are fully functional, while others are still being implemented or 
 
 Because of this, feedback and contributions are especially valuable.
 
-### 🛠️ Areas that need help
+### Areas that need help
 
 - Stabilizing and improving the malware scanning system
 - Expanding and refining system audit coverage
@@ -153,7 +153,7 @@ Because of this, feedback and contributions are especially valuable.
 - Strengthening overall architecture and modularity
 - Identifying and fixing bugs
 
-### 🤝 How you can contribute
+### How you can contribute
 
 If you're interested in system tools, security software, or Electron-based applications, contributions, testing, and feedback are welcome as the project grows.
 

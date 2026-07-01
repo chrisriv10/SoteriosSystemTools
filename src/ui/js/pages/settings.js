@@ -1,8 +1,13 @@
+let savedTheme = 'dark';
+
 window.Pages = window.Pages || {};
 window.Pages.settings = {
   async render(container) {
     const settings = await Api.getSettings();
     const appInfo = await Api.getAppInfo();
+    savedTheme = settings.ui?.theme || 'dark';
+    const activeTheme = (window.AppState && window.AppState.currentTheme) || savedTheme;
+    Api.applyTheme(activeTheme);
     container.innerHTML = `
       <div class="page-header"><h1 class="page-title">Settings</h1>
         <div class="page-subtitle">Local app preferences and feature toggles</div></div>
@@ -44,6 +49,26 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
+          <div class="panel-title" style="margin-bottom:16px;">Appearance</div>
+          <div class="field">
+            <label class="field-label">Color Scheme</label>
+            <select id="themeSelect" style="width:100%;">
+              <option value="dark" ${settings.ui?.theme === 'dark' ? 'selected' : ''}>Dark</option>
+              <option value="light" ${settings.ui?.theme === 'light' ? 'selected' : ''}>Light</option>
+              <option value="ocean" ${settings.ui?.theme === 'ocean' ? 'selected' : ''}>Ocean</option>
+              <option value="emerald" ${settings.ui?.theme === 'emerald' ? 'selected' : ''}>Emerald</option>
+              <option value="sunset" ${settings.ui?.theme === 'sunset' ? 'selected' : ''}>Sunset</option>
+              <option value="violet" ${settings.ui?.theme === 'violet' ? 'selected' : ''}>Violet</option>
+              <option value="crimson" ${settings.ui?.theme === 'crimson' ? 'selected' : ''}>Crimson</option>
+              <option value="terminal" ${settings.ui?.theme === 'terminal' ? 'selected' : ''}>Terminal</option>
+            </select>
+          </div>
+          <div class="toggle-desc" style="margin-bottom:12px;">Choose a palette for the full app experience.</div>
+          <button class="btn btn-primary" id="saveTheme" style="margin-top:4px;">Apply Theme</button>
+          <div id="themeStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
+        </div>
+
+        <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">Scanner Defaults</div>
 
           <div class="field"><label class="field-label">Default scan path</label><input type="text" id="defaultPath" value="${escapeHtml(settings.scanner.defaultPath || '')}" placeholder="e.g. C:\\Users\\..." /></div>
@@ -69,6 +94,26 @@ window.Pages.settings = {
           </div>
         </div>
       </div>`;
+
+    container.querySelector('#saveTheme').addEventListener('click', async () => {
+      const theme = container.querySelector('#themeSelect').value;
+      const status = container.querySelector('#themeStatus');
+      try {
+        Api.applyTheme(theme);
+        await Api.updateSettings({ ui: { theme } });
+        savedTheme = theme;
+        status.textContent = `Theme updated to ${theme.charAt(0).toUpperCase() + theme.slice(1)}.`;
+      } catch (err) {
+        status.textContent = err.message || String(err);
+      }
+    });
+
+    container.querySelector('#themeSelect').addEventListener('change', (event) => {
+      const theme = event.target.value;
+      Api.applyTheme(theme);
+      const status = container.querySelector('#themeStatus');
+      status.textContent = 'Preview updated. Click Apply Theme to save it.';
+    });
 
     container.querySelector('#saveSettings').addEventListener('click', async () => {
       const btn = container.querySelector('#saveSettings');
@@ -103,5 +148,11 @@ window.Pages.settings = {
     container.querySelector('#autoReportToggle').addEventListener('change', (event) => saveFeature('autoReports', event.target.checked));
     container.querySelector('#scanHistoryToggle').addEventListener('change', (event) => saveFeature('scanHistory', event.target.checked));
     container.querySelector('#sysmonToggle').addEventListener('change', (event) => saveFeature('systemMonitoring', event.target.checked));
+  },
+
+  destroy() {
+    if (typeof savedTheme !== 'undefined') {
+      Api.applyTheme(savedTheme);
+    }
   }
 };

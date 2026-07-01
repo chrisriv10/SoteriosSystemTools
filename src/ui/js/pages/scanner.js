@@ -69,8 +69,20 @@ window.Pages['scanner'] = {
     const scanButtonOriginalLabels = {};
     scanButtons.forEach((btn) => { scanButtonOriginalLabels[btn.id] = btn.textContent; });
     let isScanRunning = false;
+    let activeAction = null;
+    let showReportButton = false;
     let alive = true;
     this.cleanups.push(() => { alive = false; });
+
+    function updateFooterButtons() {
+      if (!cancelButton || !reportButton) return;
+      const showCancel = activeAction === 'virus' && isScanRunning;
+      const showReports = activeAction === 'virus' && showReportButton;
+      cancelButton.style.display = showCancel ? 'inline-block' : 'none';
+      reportButton.style.display = showReports ? 'inline-block' : 'none';
+      cancelButton.disabled = !showCancel;
+      reportButton.disabled = !showReports;
+    }
 
     function hasView() {
       return alive && document.body.contains(container);
@@ -97,19 +109,23 @@ window.Pages['scanner'] = {
           b.disabled = true;
           b.textContent = 'Scanning...';
         });
-        if (cancelButton) cancelButton.disabled = false;
       } else {
         scanButtons.forEach((b) => {
           b.disabled = false;
           b.textContent = scanButtonOriginalLabels[b.id] || b.textContent;
         });
-        if (cancelButton) cancelButton.disabled = true;
       }
+      updateFooterButtons();
     }
 
     function setComplete(success, filesScanned, threatsFound, note, canceled) {
       if (!hasView()) return;
       setProgress(100);
+      if (activeAction === 'virus') {
+        showReportButton = canceled || success;
+      } else {
+        showReportButton = false;
+      }
       setScanning(false);
       if (canceled) {
         if (scanStatus) scanStatus.textContent = 'Scan Canceled';
@@ -131,13 +147,17 @@ window.Pages['scanner'] = {
         if (scanIcon) { scanIcon.className = 'status-icon danger';
         scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'; }
       }
+      updateFooterButtons();
     }
 
     async function refreshStatus() {
       try {
         const status = await window.api.invoke('scan:status');
         if (!hasView()) return;
-        if (status.scan && status.scan.isScanning) setScanning(true);
+        if (status.scan && status.scan.isScanning) {
+          activeAction = status.scan.currentScan && status.scan.currentScan.scanType === 'definitions' ? 'definitions' : 'virus';
+          setScanning(true);
+        }
         const engine = status.engine || status;
         if (!engine.ready) {
           if (clamStatusText) clamStatusText.textContent = 'ClamAV is not ready. The bundled scanner could not be found.';
@@ -162,17 +182,21 @@ window.Pages['scanner'] = {
         b.disabled = false;
         b.textContent = scanButtonOriginalLabels[b.id] || b.textContent;
       });
-      if (cancelButton) cancelButton.disabled = true;
       isScanRunning = false;
+      showReportButton = false;
+      updateFooterButtons();
     }
 
     // Subscribe to scan progress events from main process
     this.cleanups.push(window.api.on('scan:progress', (data) => {
       if (!hasView()) return;
       if (data && data.pct !== undefined) {
+        if (data.scanType) {
+          activeAction = data.scanType === 'definitions' ? 'definitions' : 'virus';
+        }
         if (scanCard) scanCard.style.display = 'block';
         setProgress(data.pct);
-        if (scanDetail) scanDetail.textContent = data.message || 'Scanning\u2026';
+        if (scanDetail) scanDetail.textContent = data.message || 'Scanning…';
       }
     }));
 
@@ -180,6 +204,7 @@ window.Pages['scanner'] = {
       if (!data) return;
       if (window.AppRouter && window.AppRouter.current && window.AppRouter.current() !== 'scanner') return;
       const canceled = data.status === 'canceled';
+      if (data.scanType) activeAction = data.scanType === 'definitions' ? 'definitions' : 'virus';
       setComplete(!canceled && data.status !== 'failed', data.filesScanned || 0, data.threatsFound || 0, data.note || data.error || '', canceled);
     }));
 
@@ -188,6 +213,10 @@ window.Pages['scanner'] = {
         setError('A scan is already in progress. Cancel it or wait for it to complete before updating definitions.');
         return;
       }
+      activeAction = 'definitions';
+      isScanRunning = true;
+      showReportButton = false;
+      updateFooterButtons();
       scanCard.style.display = 'block';
       scanStatus.textContent = 'Updating Definitions';
       scanDetail.textContent = 'Downloading the latest ClamAV signatures...';
@@ -204,12 +233,16 @@ window.Pages['scanner'] = {
       } catch (e) {
         setError(e.message);
       } finally {
+        isScanRunning = false;
+        activeAction = null;
+        showReportButton = false;
+        updateFooterButtons();
         if (hasView() && updateDefinitionsButton) updateDefinitionsButton.disabled = false;
       }
     });
 
     cancelButton.addEventListener('click', async () => {
-      if (!isScanRunning) return;
+      if (!isScanRunning || activeAction !== 'virus') return;
       cancelButton.disabled = true;
       scanStatus.textContent = 'Canceling Scan';
       scanDetail.textContent = 'Stopping the active scanner process...';
@@ -229,6 +262,8 @@ window.Pages['scanner'] = {
         setError('A scan is already in progress. Cancel it or wait for it to complete before starting another scan.');
         return;
       }
+      activeAction = 'virus';
+      showReportButton = false;
       setScanning(true);
       if (beforeStart) beforeStart();
       try {
@@ -257,6 +292,7 @@ window.Pages['scanner'] = {
       });
     });
 
+    updateFooterButtons();
     refreshStatus();
   }
 };

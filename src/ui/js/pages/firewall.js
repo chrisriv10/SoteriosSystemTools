@@ -8,12 +8,37 @@ window.Pages['firewall'] = {
       </header>
       <div id="firewallContent">
         <div class="empty-state">Loading firewall profiles\u2026</div>
+        <div class="loading-progress" style="margin-top:8px;">
+          <div class="loading-progress-bar"></div>
+        </div>
       </div>
     `;
     this.load(container);
   },
   async load(container) {
     const content = container.querySelector('#firewallContent');
+    const progressBar = content?.querySelector('.loading-progress-bar');
+    let progressTimer = null;
+    const setLoadingState = (active) => {
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      if (!progressBar) return;
+      if (!active) {
+        progressBar.style.opacity = '0';
+        progressBar.style.width = '100%';
+        return;
+      }
+      progressBar.style.opacity = '1';
+      progressBar.style.width = '8%';
+      let currentWidth = 8;
+      progressTimer = setInterval(() => {
+        currentWidth = Math.min(currentWidth + Math.random() * 12 + 4, 88);
+        progressBar.style.width = `${currentWidth}%`;
+      }, 180);
+    };
+    setLoadingState(true);
     try {
       const [profiles, rules] = await Promise.all([
         window.api.invoke('firewall:status'),
@@ -92,18 +117,20 @@ window.Pages['firewall'] = {
             <span style="font-weight:600; font-size:0.95rem; letter-spacing:0.3px;">Network Perimeter Map</span>
             <span style="margin-left:auto; font-size:0.78rem; color:var(--text-muted); letter-spacing:0.5px; text-transform:uppercase;">Live Rule Distribution</span>
           </div>
-          <canvas id="perimeterCanvas" style="display:block; width:100%; max-width:680px; margin:0 auto; cursor:default;" height="340"></canvas>
+          <canvas id="perimeterCanvas" style="display:block; width:100%; max-width:680px; margin:0 auto; cursor:default; height:auto;" height="420"></canvas>
           <div id="perimeterLegend" style="display:flex; justify-content:center; gap:28px; margin-top:16px; flex-wrap:wrap;"></div>
         </div>
       `;
 
-      content.innerHTML = html;
+      content.innerHTML = html + '<div class="loading-progress" style="margin-top:16px;"><div class="loading-progress-bar" style="width:100%;opacity:1"></div></div>';
 
       // Boot the canvas visualizer after DOM is ready
       requestAnimationFrame(() => this._initPerimeterMap(safeRules, list));
 
     } catch (e) {
       content.innerHTML = `<div class="empty-state">Error loading firewall: ${escapeHtml(e.message)}</div>`;
+    } finally {
+      setLoadingState(false);
     }
   },
 
@@ -128,15 +155,37 @@ window.Pages['firewall'] = {
     };
 
     const card = document.getElementById('perimeterMapCard');
-    const cardWidth = card ? card.clientWidth - 56 : 680;
-    canvas.width = Math.min(cardWidth, 680);
-    canvas.height = 340;
+    const baseWidth = 680;
+    const baseHeight = 420;
+    const dpr = window.devicePixelRatio || 1;
 
     const ctx = canvas.getContext('2d');
-    const W = canvas.width;
-    const H = canvas.height;
-    const cx = W / 2;
-    const cy = H / 2 + 10;
+    let W = 0;
+    let H = 0;
+    let cx = 0;
+    let cy = 0;
+
+    const resizeCanvas = () => {
+      const cardWidth = card ? Math.max(280, card.clientWidth - 56) : baseWidth;
+      const width = Math.min(cardWidth, baseWidth);
+      const height = Math.max(280, Math.round((width / baseWidth) * baseHeight));
+
+      const pixelWidth = Math.round(width * dpr);
+      const pixelHeight = Math.round(height * dpr);
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+      }
+
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      W = width;
+      H = height;
+      cx = W / 2;
+      cy = H / 2 + 6;
+      return { width, height };
+    };
 
     // Profile ring data
     const profileNames = ['domain', 'private', 'public'];
@@ -157,7 +206,7 @@ window.Pages['firewall'] = {
 
     // Particles
     const PARTICLE_COUNT = 38;
-    const particles = [];
+    let particles = [];
 
     function spawnParticle() {
       // Pick a profile ring weighted by rule count
@@ -190,11 +239,16 @@ window.Pages['firewall'] = {
       };
     }
 
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const p = spawnParticle();
-      p.life = Math.floor(Math.random() * p.maxLife); // stagger starts
-      particles.push(p);
+    function initParticles() {
+      particles = [];
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const p = spawnParticle();
+        p.life = Math.floor(Math.random() * p.maxLife); // stagger starts
+        particles.push(p);
+      }
     }
+
+    initParticles();
 
     // Build legend
     const legend = document.getElementById('perimeterLegend');
@@ -221,7 +275,16 @@ window.Pages['firewall'] = {
     let frame = 0;
     let animId;
 
+    const handleResize = () => {
+      cancelAnimationFrame(animId);
+      resizeCanvas();
+      frame = 0;
+      initParticles();
+      draw();
+    };
+
     function draw() {
+      resizeCanvas();
       ctx.clearRect(0, 0, W, H);
 
       // Background subtle radial glow
@@ -422,11 +485,13 @@ window.Pages['firewall'] = {
     }
 
     draw();
+    window.addEventListener('resize', handleResize);
 
     // Cleanup on navigation away
     const observer = new MutationObserver(() => {
       if (!document.getElementById('perimeterCanvas')) {
         cancelAnimationFrame(animId);
+        window.removeEventListener('resize', handleResize);
         observer.disconnect();
       }
     });

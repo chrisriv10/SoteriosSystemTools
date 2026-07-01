@@ -83,7 +83,7 @@ window.Pages['dashboard'] = {
             </div>
           </div>
           <div style="margin-top: 16px;">
-            <button class="btn" onclick="window.AppRouter.navigate('quarantine')">View Quarantine</button>
+            <button class="btn" id="btnViewQuarantine">View Quarantine</button>
           </div>
         </div>
       </div>
@@ -202,9 +202,34 @@ window.Pages['dashboard'] = {
     const btnRefreshWarnings = container.querySelector('#btnRefreshWarnings');
     const btnQuickScan = document.getElementById('btnQuickScan');
     const btnFullScan = document.getElementById('btnFullScan');
+    const btnUpdateDb = document.getElementById('btnUpdateDb');
+    const btnViewQuarantine = document.getElementById('btnViewQuarantine');
     const originalQuickLabel = btnQuickScan ? btnQuickScan.textContent : 'Quick Scan';
     const originalFullLabel = btnFullScan ? btnFullScan.textContent : 'Full Scan';
     if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', loadWarnings);
+    if (btnUpdateDb) {
+      btnUpdateDb.addEventListener('click', async () => {
+        btnUpdateDb.disabled = true;
+        const originalText = btnUpdateDb.textContent;
+        btnUpdateDb.textContent = 'Checking...';
+        try {
+          const res = await window.api.invoke('scan:updateDefinitions');
+          if (res && !res.success) {
+            alert(res.error || 'Definition update failed.');
+          }
+        } catch (err) {
+          alert(err.message || 'Definition update failed.');
+        } finally {
+          btnUpdateDb.disabled = false;
+          btnUpdateDb.textContent = originalText;
+        }
+      });
+    }
+    if (btnViewQuarantine) {
+      btnViewQuarantine.addEventListener('click', () => {
+        if (window.AppRouter) window.AppRouter.navigate('quarantine');
+      });
+    }
     await loadWarnings();
 
     btnToggleRtp.addEventListener('click', async () => {
@@ -275,7 +300,10 @@ window.Pages['dashboard'] = {
 
       const quarantineList = await window.api.invoke('db:getQuarantineList');
       if (quarantineList) {
-        document.getElementById('threatsCount').textContent = quarantineList.length;
+        const threatsCountEl = container.querySelector('#threatsCount');
+        if (threatsCountEl) {
+          threatsCountEl.textContent = quarantineList.length;
+        }
       }
     } catch(e) {
       console.warn('Failed to load dashboard data:', e);

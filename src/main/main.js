@@ -3,19 +3,33 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-// Workaround: ensure Electron's disk cache uses a writable folder and
-// disable GPU disk cache where it may fail due to permission issues
+// Ensure Chromium/Electron uses a writable data/cache location instead of
+// falling back to a restricted or temp-based path on Windows.
 try {
-  const userDataPath = app.getPath && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(os.homedir(), '.soterios');
+  const appDataRoot = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+  const defaultUserDataPath = path.join(appDataRoot, 'Soterios');
+  const userDataPath = process.env.SOTERIOS_USERDATA || defaultUserDataPath;
   const cacheDir = path.join(userDataPath, 'cache');
-  try { fs.mkdirSync(cacheDir, { recursive: true }); } catch (_) { /* fallback handled below */ }
-  // Prefer a writable location; fall back to OS temp dir if creation failed
-  const finalCache = fs.existsSync(cacheDir) ? cacheDir : path.join(os.tmpdir(), 'soterios-cache');
-  try { fs.mkdirSync(finalCache, { recursive: true }); } catch (_) { }
-  app.commandLine.appendSwitch('disk-cache-dir', finalCache);
-  // Disable GPU disk cache to avoid related failures on some Windows setups
+  const tempDir = path.join(userDataPath, 'temp');
+
+  for (const dirPath of [userDataPath, cacheDir, tempDir]) {
+    try { fs.mkdirSync(dirPath, { recursive: true }); } catch (_) { }
+  }
+
+  app.setPath('userData', userDataPath);
+  app.setPath('cache', cacheDir);
+  app.setPath('temp', tempDir);
+
+  app.commandLine.appendSwitch('disk-cache-dir', cacheDir);
+  app.commandLine.appendSwitch('media-cache-dir', cacheDir);
+  app.commandLine.appendSwitch('disable-http-cache');
+  app.commandLine.appendSwitch('disable-logging');
   app.commandLine.appendSwitch('disable-gpu');
   app.commandLine.appendSwitch('disable-gpu-compositing');
+  app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+  app.commandLine.appendSwitch('disable-software-rasterizer');
+  app.commandLine.appendSwitch('disable-background-networking');
+  app.commandLine.appendSwitch('disable-features', 'NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill');
 } catch (err) {
   // If anything goes wrong here, we intentionally continue — these are best-effort mitigations
 }
@@ -85,8 +99,10 @@ function createWindow() {
     mainWindow.show();
   });
 
-  if (process.argv.includes('--dev')) {
-    mainWindow.webContents.openDevTools();
+  if (process.argv.includes('--dev') || process.env.NODE_ENV === 'development') {
+    mainWindow.webContents.once('did-finish-load', () => {
+      mainWindow.webContents.openDevTools({ mode: 'detach' });
+    });
   }
 }
 
@@ -167,7 +183,7 @@ app.whenReady().then(async () => {
   // Initialize Engines
   await clamEngine.init();
   if (db.getSetting('feature.realtimeProtection', true)) {
-    realtimeWatcher.start();
+    await realtimeWatcher.start();
   }
   loadPlugins();
 
@@ -210,8 +226,18 @@ app.whenReady().then(async () => {
       mainWindow.webContents.send('scan:complete', data);
     }
     announcedProgress.clear();
-    const label = data.status === 'completed' ? 'Scan completed' : data.status === 'canceled' ? 'Scan canceled' : 'Scan finished with issues';
-    showNotification(label, `${data.filesScanned || 0} file(s) scanned, ${data.threatsFound || 0} threat(s) found.`);
+    let label;
+    let body;
+    if (data && data.scanType === 'definitions') {
+      label = data.status === 'completed' ? 'Signatures updated' : data.status === 'canceled' ? 'Definitions update canceled' : 'Definitions update failed';
+      body = data.status === 'completed'
+        ? 'ClamAV signatures are up to date.'
+        : data.error || 'ClamAV signature update failed.';
+    } else {
+      label = data.status === 'completed' ? 'Scan completed' : data.status === 'canceled' ? 'Scan canceled' : 'Scan finished with issues';
+      body = `${data.filesScanned || 0} file(s) scanned, ${data.threatsFound || 0} threat(s) found.`;
+    }
+    showNotification(label, body);
     // Auto-generate a scan report
     (async () => {
       try {

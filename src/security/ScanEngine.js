@@ -98,7 +98,7 @@ class ScanEngine {
     let wasCanceled = false;
 
     try {
-      this.eventBus.emit('scan:progress', { pct: 5, message: startMessage });
+      this.eventBus.emit('scan:progress', { scanType, pct: 5, message: startMessage });
 
       for (let i = 0; i < paths.length; i++) {
         if (this.abortController.signal.aborted) {
@@ -108,19 +108,19 @@ class ScanEngine {
 
         const targetPath = paths[i];
         const basePct = Math.round((i / paths.length) * 80 + 10);
-        this.eventBus.emit('scan:progress', { pct: basePct, message: 'Scanning ' + targetPath + '...' });
+        this.eventBus.emit('scan:progress', { scanType, pct: basePct, message: 'Scanning ' + targetPath + '...' });
 
         const result = await this.clamEngine.scanFile(targetPath, (progress) => {
           if (!progress) return;
 
           if (progress.phase === 'update') {
-            this.eventBus.emit('scan:progress', { pct: Math.max(8, basePct - 2), message: 'Updating ClamAV definitions...' });
+            this.eventBus.emit('scan:progress', { scanType, pct: Math.max(8, basePct - 2), message: 'Updating ClamAV definitions...' });
             return;
           }
 
           const checked = progress.fileCount || 0;
           const pct = Math.min(95, basePct + Math.min(70, Math.round(checked / 10)));
-          this.eventBus.emit('scan:progress', { pct, message: 'Scanning ' + targetPath + ' (' + checked + ' files checked)...' });
+          this.eventBus.emit('scan:progress', { scanType, pct, message: 'Scanning ' + targetPath + ' (' + checked + ' files checked)...' });
         });
 
         if (this.abortController.signal.aborted) {

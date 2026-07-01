@@ -8,12 +8,37 @@ window.Pages['network'] = {
       </header>
       <div id="networkContent">
         <div class="empty-state">Loading network stats\u2026</div>
+        <div class="loading-progress" style="margin-top:8px;">
+          <div class="loading-progress-bar"></div>
+        </div>
       </div>
     `;
     this.load(container);
   },
   async load(container) {
     const content = container.querySelector('#networkContent');
+    const progressBar = content?.querySelector('.loading-progress-bar');
+    let progressTimer = null;
+    const setLoadingState = (active) => {
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      if (!progressBar) return;
+      if (!active) {
+        progressBar.style.opacity = '0';
+        progressBar.style.width = '100%';
+        return;
+      }
+      progressBar.style.opacity = '1';
+      progressBar.style.width = '8%';
+      let currentWidth = 8;
+      progressTimer = setInterval(() => {
+        currentWidth = Math.min(currentWidth + Math.random() * 12 + 4, 88);
+        progressBar.style.width = `${currentWidth}%`;
+      }, 180);
+    };
+    setLoadingState(true);
     try {
       const [statsResult, connectionsResult] = await Promise.allSettled([
         window.api.invoke('network:stats'),
@@ -73,9 +98,11 @@ window.Pages['network'] = {
         html += '</div>';
       }
 
-      content.innerHTML = html;
+      content.innerHTML = html + '<div class="loading-progress" style="margin-top:16px;"><div class="loading-progress-bar" style="width:100%;opacity:1"></div></div>';
     } catch (e) {
       content.innerHTML = `<div class="empty-state">Error loading network: ${escapeHtml(e.message)}</div>`;
+    } finally {
+      setLoadingState(false);
     }
   }
 };

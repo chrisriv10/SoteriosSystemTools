@@ -63,15 +63,16 @@ function registerIpcHandlers(mainWindow, services) {
 
   ipcMain.handle('scan:updateDefinitions', async () => {
     const result = await clamEngine.updateDefinitions((progress) => {
-      eventBus.emit('scan:progress', { pct: 10, message: 'Updating ClamAV definitions...' });
+      eventBus.emit('scan:progress', { scanType: 'definitions', pct: 10, message: 'Updating ClamAV definitions...' });
       if (progress && progress.text) {
         const match = progress.text.match(/(\d+)%/);
         if (match) {
-          eventBus.emit('scan:progress', { pct: Math.min(95, Number(match[1])), message: 'Updating ClamAV definitions...' });
+          eventBus.emit('scan:progress', { scanType: 'definitions', pct: Math.min(95, Number(match[1])), message: 'Updating ClamAV definitions...' });
         }
       }
     });
     eventBus.emit('scan:complete', {
+      scanType: 'definitions',
       status: result.success ? 'completed' : 'failed',
       filesScanned: 0,
       threatsFound: 0,
@@ -107,11 +108,15 @@ function registerIpcHandlers(mainWindow, services) {
   });
 
   // -- Real-Time Protection --
-  ipcMain.handle('rtp:status', () => realtimeWatcher.getStatus());
-  ipcMain.handle('rtp:toggle', (_event, enable) => {
-    if (enable) realtimeWatcher.start();
-    else realtimeWatcher.stop();
-    return realtimeWatcher.getStatus();
+  ipcMain.handle('rtp:status', async () => {
+    const result = await realtimeWatcher.getStatus();
+    return result.ok ? result.enabled : false;
+  });
+
+  ipcMain.handle('rtp:toggle', async (_event, enable) => {
+    const result = enable ? await realtimeWatcher.start() : await realtimeWatcher.stop();
+    if (!result.ok) throw new Error(result.error || 'Unable to update real-time protection.');
+    return result.enabled;
   });
 
   // -- Process Inspector --
@@ -120,8 +125,10 @@ function registerIpcHandlers(mainWindow, services) {
   });
 
   // -- Audit & Firewall & Network --
-  ipcMain.handle('audit:run', async () => {
-    return services.systemAudit.runAudit();
+  ipcMain.handle('audit:run', async (event) => {
+    return services.systemAudit.runAudit((label) => {
+      event.sender.send('audit:progress', label);
+    });
   });
   
   ipcMain.handle('firewall:status', async () => {

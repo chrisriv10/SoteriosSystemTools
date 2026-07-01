@@ -8,13 +8,44 @@ window.Pages['audit'] = {
       </header>
       <div id="auditContent">
         <div class="empty-state">Running audit checks\u2026</div>
+        <div class="loading-progress" style="margin-top:8px;">
+          <div class="loading-progress-bar"></div>
+        </div>
+        <div id="auditProgressLabel" class="page-subtitle" style="margin-top:6px; font-size:0.8rem; opacity:0.85;"></div>
       </div>
     `;
     this.load(container);
   },
   async load(container) {
     const content = container.querySelector('#auditContent');
+    const progressBar = content?.querySelector('.loading-progress-bar');
+    let progressTimer = null;
+    const setLoadingState = (active) => {
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      if (!progressBar) return;
+      if (!active) {
+        progressBar.style.opacity = '0';
+        progressBar.style.width = '100%';
+        return;
+      }
+      progressBar.style.opacity = '1';
+      progressBar.style.width = '8%';
+      let currentWidth = 8;
+      progressTimer = setInterval(() => {
+        currentWidth = Math.min(currentWidth + Math.random() * 12 + 4, 88);
+        progressBar.style.width = `${currentWidth}%`;
+      }, 180);
+    };
+    setLoadingState(true);
+    let unsubscribeProgress = null;
     try {
+      unsubscribeProgress = window.api.on('audit:progress', (label) => {
+        const labelEl = container.querySelector('#auditProgressLabel');
+        if (labelEl) labelEl.textContent = label;
+      });
       const results = await window.api.invoke('audit:run');
       const ignored = await window.api.invoke('warnings:listIgnored');
       const ignoredIds = new Set((ignored || []).map((w) => w.id));
@@ -65,7 +96,7 @@ window.Pages['audit'] = {
             <div class="history-item"><div><div class="history-title">${escapeHtml(w.title)}</div><div class="history-meta">${escapeHtml(w.detail || '')}</div></div>
             <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">Restore</button></div>`).join('')}</div></div>`;
       }
-      content.innerHTML = html;
+      content.innerHTML = html + '<div class="loading-progress" style="margin-top:16px;"><div class="loading-progress-bar" style="width:100%;opacity:1"></div></div>';
       content.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
         const card = btn.closest('.card');
         btn.disabled = true;
@@ -92,6 +123,9 @@ window.Pages['audit'] = {
       }));
     } catch (e) {
       content.innerHTML = `<div class="empty-state">Error running audit: ${escapeHtml(e.message)}</div>`;
+    } finally {
+      if (typeof unsubscribeProgress === 'function') unsubscribeProgress();
+      setLoadingState(false);
     }
   }
   ,

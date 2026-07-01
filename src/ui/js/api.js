@@ -1,4 +1,40 @@
 const Api = {
+  applyTheme(themeName) {
+    const theme = typeof themeName === 'string' && themeName ? themeName : 'dark';
+    const normalized = {
+      'black-red': 'crimson',
+      'black-green': 'terminal'
+    }[theme] || theme;
+    const allowed = ['dark', 'light', 'ocean', 'emerald', 'sunset', 'violet', 'crimson', 'terminal'];
+    const finalTheme = allowed.includes(normalized) ? normalized : 'dark';
+    document.documentElement.setAttribute('data-theme', finalTheme);
+    document.documentElement.style.setProperty('--theme-name', finalTheme);
+    if (window.AppState) window.AppState.currentTheme = finalTheme;
+    try {
+      if (window.localStorage) window.localStorage.setItem('soterios.theme', finalTheme);
+    } catch (_) {}
+  },
+  async initializeTheme() {
+    if (window.AppState && window.AppState.currentTheme) {
+      this.applyTheme(window.AppState.currentTheme);
+      return;
+    }
+    try {
+      const theme = await window.api.invoke('db:getSetting', 'ui.theme', 'dark');
+      if (theme) {
+        this.applyTheme(theme);
+        return;
+      }
+    } catch (_) {}
+    try {
+      const storedTheme = window.localStorage && window.localStorage.getItem('soterios.theme');
+      if (storedTheme) {
+        this.applyTheme(storedTheme);
+        return;
+      }
+    } catch (_) {}
+    this.applyTheme('dark');
+  },
   async listTools() { return window.soterios.tools.list(); },
   async runTool(toolId, args) {
     const result = await window.soterios.tools.run(toolId, args);
@@ -20,9 +56,22 @@ const Api = {
     const autoReports = await window.api.invoke('db:getSetting', 'feature.autoReports', true);
     const scanHistory = await window.api.invoke('db:getSetting', 'feature.scanHistory', true);
     const systemMonitoring = await window.api.invoke('db:getSetting', 'feature.systemMonitoring', true);
+    const dbTheme = await window.api.invoke('db:getSetting', 'ui.theme', 'dark');
+    let storedTheme = null;
+    try {
+      storedTheme = window.localStorage && window.localStorage.getItem('soterios.theme');
+    } catch (_) {
+      storedTheme = null;
+    }
+    const theme = (window.AppState && window.AppState.currentTheme)
+      || dbTheme
+      || storedTheme
+      || 'dark';
+    if (window.AppState) window.AppState.currentTheme = theme;
     return {
       scanner: { defaultPath, maxDepth, maxFileSizeMB, includeCleanResults, excludedDirNames },
-      features: { realtimeProtection, autoReports, scanHistory, systemMonitoring }
+      features: { realtimeProtection, autoReports, scanHistory, systemMonitoring },
+      ui: { theme }
     };
   },
   async updateSettings(patch) {
@@ -44,8 +93,19 @@ const Api = {
       if (Object.prototype.hasOwnProperty.call(f, 'scanHistory')) await window.api.invoke('db:setSetting', 'feature.scanHistory', !!f.scanHistory);
       if (Object.prototype.hasOwnProperty.call(f, 'systemMonitoring')) await window.api.invoke('db:setSetting', 'feature.systemMonitoring', !!f.systemMonitoring);
     }
+    if (patch.ui) {
+      const u = patch.ui;
+      if (Object.prototype.hasOwnProperty.call(u, 'theme')) {
+        await window.api.invoke('db:setSetting', 'ui.theme', u.theme || 'dark');
+        try {
+          if (window.localStorage) window.localStorage.setItem('soterios.theme', u.theme || 'dark');
+        } catch (_) {}
+      }
+    }
   },
   async getHistory(kind, limit) { try { return await window.api.invoke('db:getScanHistory', limit || 10); } catch (e) { return []; } },
   async getQuarantine() { try { return await window.api.invoke('db:getQuarantineList'); } catch (e) { return []; } },
   async getAppInfo() { return window.soterios.app.info(); }
 };
+
+window.Api = Api;

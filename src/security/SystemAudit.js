@@ -6,19 +6,29 @@ const path = require('path');
 const fs = require('fs');
 
 class SystemAudit {
-  async runPowerShell(script) {
+  async runPowerShell(script, timeoutMs = 15000) {
     try {
-      const { stdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -Command "${script}"`, { timeout: 15000 });
-      return { ok: true, stdout };
+      const { stdout, stderr } = await execPromise(
+        `powershell.exe -NoProfile -NonInteractive -Command "${script}"`,
+        { timeout: timeoutMs, maxBuffer: 1024 * 1024 * 10 }
+      );
+      return { ok: true, stdout, stderr };
     } catch (e) {
-      return { ok: false, error: e.message };
+      const timedOut = e.killed && e.signal === 'SIGTERM';
+      return {
+        ok: false,
+        error: timedOut
+          ? `Query timed out after ${timeoutMs}ms (Windows Update search can be slow — try again or check manually in Settings).`
+          : (e.stderr && e.stderr.trim()) || e.message
+      };
     }
   }
 
-  async runAudit() {
+  async runAudit(onProgress) {
     const results = [];
 
     // 1. Windows Defender
+    onProgress?.('Checking Windows Defender...');
     const def = await this.runPowerShell(`Get-MpComputerStatus | Select-Object AMServiceEnabled, AntivirusEnabled, RealTimeProtectionEnabled, AMEngineVersion, AntivirusSignatureVersion, AntivirusSignatureAge | ConvertTo-Json`);
     if (def.ok) {
       try {
@@ -37,6 +47,7 @@ class SystemAudit {
     }
 
     // 2. UAC
+    onProgress?.('Checking User Account Control (UAC)...');
     const uac = await this.runPowerShell(`(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System').EnableLUA`);
     if (uac.ok) {
       const enabled = uac.stdout.trim() === '1';
@@ -51,7 +62,8 @@ class SystemAudit {
     }
 
     // 3. Windows Update status
-    const up = await this.runPowerShell(`$session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $pending = $searcher.Search('IsInstalled=0 and IsHidden=0'); $pending.Updates.Count`);
+    onProgress?.('Checking Windows Update (this can take up to a minute)...');
+    const up = await this.runPowerShell(`$session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $pending = $searcher.Search('IsInstalled=0 and IsHidden=0'); $pending.Updates.Count`, 90000);
     if (up.ok) {
       const raw = up.stdout.trim();
       const count = /^[0-9]+$/.test(raw) ? Number(raw) : null;
@@ -67,6 +79,7 @@ class SystemAudit {
     }
 
     // 4. BitLocker
+    onProgress?.('Checking BitLocker status...');
     const bl = await this.runPowerShell(`Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop | Select-Object ProtectionStatus | ConvertTo-Json`);
     if (bl.ok) {
       try {
@@ -103,6 +116,7 @@ class SystemAudit {
     }
 
     // 5. PowerShell Execution Policy
+    onProgress?.('Checking PowerShell execution policy...');
     const ep = await this.runPowerShell(`try { (Get-ExecutionPolicy -Scope LocalMachine -ErrorAction Stop).ToString() } catch { '' }`);
     if (ep.ok) {
       const policy = ep.stdout.trim();
@@ -119,6 +133,7 @@ class SystemAudit {
     }
 
     // 6. Secure Boot status
+    onProgress?.('Checking Secure Boot status...');
     const sb = await this.runPowerShell(`Confirm-SecureBootUEFI`);
     if (sb.ok) {
       const enabled = sb.stdout.trim() === 'True';

@@ -5,7 +5,7 @@
 <h1 align="center">Soterios</h1>
 
 <p align="center">
-  <strong>Open-source, local-first security and system maintenance suite.</strong><br/>
+  <strong>Open-source, local-first security and system maintenance suite optimized for Windows.</strong><br/>
   Scan files, inspect processes, audit your system, manage your firewall, test password strength, and check known breaches privately.
 </p>
 
@@ -39,7 +39,6 @@ Pick the installer for your operating system from the [latest release](https://g
 - **Firewall Management** — Windows Firewall profile status and rule summaries
 - **Network Monitor** — active connections and interface activity
 - **Password Tools** — local generator, strength checker, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks
-- **Real-Time Protection** — local file-system watcher for live threat detection
 - **Quarantine Management** — restore or permanently delete isolated files
 - **Tools & Maintenance** — temp cleanup, disk reports, large file finder, browser cache reports, startup items, network reports, and Windows services reports
 
@@ -88,11 +87,11 @@ Built artifacts are output to the `dist/` directory.
 
 1. **Dashboard** — review your health score, active warnings, and real-time protection status.
 2. **Virus Scan** — run a quick, full, or custom scan.
-3. **Reports** — view detailed scan results without leaving the app.
+3. **Reports** — view detailed scan results. 
 4. **Windows Audit** — check Defender, UAC, BitLocker, and other Windows security settings.
 5. **Firewall** — inspect firewall profile status and rules.
 6. **Process Inspector** — review high-risk or resource-heavy processes.
-7. **Passwords** — generate secure passwords, check strength locally, and optionally look up breaches.
+7. **Passwords** — generate secure passwords, check strength locally, and look up breaches.
 
 ---
 
